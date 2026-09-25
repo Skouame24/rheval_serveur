@@ -1,4 +1,10 @@
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Charge .env depuis cwd et depuis le dossier racine du projet (relatif à dist/)
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+dotenv.config();
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
