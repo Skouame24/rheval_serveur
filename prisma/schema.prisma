@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model bonus_commissions {
+  id                String            @id
+  montantCalcule    Decimal           @db.Decimal(10, 2)
+  statutPaiement    String            @default("A_PAYER")
+  ficheId           String            @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime
+  fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model competences {
+  id                String            @id
+  intitule          String
+  note              Decimal?          @db.Decimal(4, 2)
+  observation       String?
+  ficheId           String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime
+  fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model cycles_evaluation {
+  id                 String              @id
+  libelle            String
+  annee              Int
+  typeCycle          String
+  dateOuverture      DateTime
+  dateFermeture      DateTime
+  statut             String
+  creeParUserId      String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  utilisateurs_cache utilisateurs_cache  @relation(fields: [creeParUserId], references: [id_microsoft])
+  fiches_evaluation  fiches_evaluation[]
+}
+
+model evaluations {
+  examinateurId String
+  objectifId    String
+  note          Decimal?  @db.Decimal(4, 2)
+  observation   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime
+  objectifs     objectifs @relation(fields: [objectifId], references: [id], onDelete: Cascade)
+
+  @@id([examinateurId, objectifId])
+}
+
+model feedbacks_360 {
+  id                String            @id
+  evaluateurId      String
+  pointsForts       String
+  axesProgression   String
+  ficheId           String
+  createdAt         DateTime          @default(now())
+  fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model fiches_evaluation {
+  id                    String                  @id
+  statut                String
+  noteGlobale           Decimal?                @db.Decimal(4, 2)
+  observation           String?
+  cycleId               String
+  salarieId             String
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime
+  typeEvaluation        String                  @default("STANDARD")
+  bonus_commissions     bonus_commissions?
+  competences           competences[]
+  feedbacks_360         feedbacks_360[]
+  cycles_evaluation     cycles_evaluation       @relation(fields: [cycleId], references: [id])
+  utilisateurs_cache    utilisateurs_cache      @relation(fields: [salarieId], references: [id_microsoft])
+  historique_evaluation historique_evaluation[]
+  objectifs             objectifs[]
+  suggestions           suggestions[]
+}
+
+model historique_evaluation {
+  id                String            @id
+  statutFiche       String?
+  action            String
+  commentaire       String?
+  effectueParId     String
+  ficheId           String
+  dateAction        DateTime          @default(now())
+  fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model indicateurs {
+  id         String    @id
+  intitule   String
+  noteMin    Decimal?  @db.Decimal(4, 2)
+  noteMax    Decimal?  @db.Decimal(4, 2)
+  objectifId String
+  objectifs  objectifs @relation(fields: [objectifId], references: [id], onDelete: Cascade)
+}
+
+model objectifs {
+  id                String            @id
+  intitule          String
+  noteGlobale       Decimal?          @db.Decimal(4, 2)
+  ficheId           String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime
+  evaluations       evaluations[]
+  indicateurs       indicateurs[]
+  fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model suggestions {
+  id                String            @id
+  examinateurId     String
+  observation       String
+  ficheId           String
+  createdAt         DateTime          @default(now())
+  fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model utilisateurs_cache {
+  id_microsoft      String              @id
+  matricule         String?             @unique
+  nom               String
+  email             String              @unique
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  isCodir           Boolean             @default(false)
+  managerId         String?
+  departement       String?
+  poste             String?
+  role              String?             @default("SALARIE")
+  telephone         String?
+  cycles_evaluation cycles_evaluation[]
+  fiches_evaluation fiches_evaluation[]
+}
