@@ -31,8 +31,8 @@ export class AuthService {
         poste: data.poste,
         departement: data.departement,
         telephone: data.telephone,
-        role: data.role || 'SALARIE',
-        managerId: data.managerId,
+        ...(data.role ? { role: data.role } : {}),
+        ...(data.managerId ? { managerId: data.managerId } : {}),
         updatedAt: new Date(),
       },
       create: {
