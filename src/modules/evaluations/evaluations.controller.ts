@@ -28,6 +28,15 @@ export class EvaluationsController {
     return this.evaluationsService.signSalarie(id, body.observation, userId);
   }
 
+  @Put('evaluations/:id/auto-evaluation')
+  async submitAutoEvaluation(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Headers('x-user-id') userId?: string,
+  ) {
+    return this.evaluationsService.submitAutoEvaluation(id, body, userId);
+  }
+
   @Put('n1/evaluations/:id')
   async submitNotesN1(
     @Param('id') id: string,

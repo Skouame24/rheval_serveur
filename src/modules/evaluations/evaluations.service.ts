@@ -103,6 +103,80 @@ export class EvaluationsService {
     };
   }
 
+  async submitAutoEvaluation(
+    id: string,
+    dto: { notes: Array<{ objectifId: string; note: number; commentaire?: string }>; observations?: string },
+    userId?: string,
+  ) {
+    const existing = await this.prisma.fiches_evaluation.findUnique({
+      where: { id },
+      include: { objectifs: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Fiche ${id} introuvable`);
+    }
+
+    const examinateurId = userId || existing.salarieId;
+
+    if (dto.notes && dto.notes.length > 0) {
+      for (const item of dto.notes) {
+        await this.prisma.evaluations.upsert({
+          where: {
+            examinateurId_objectifId: {
+              examinateurId,
+              objectifId: item.objectifId,
+            },
+          },
+          update: {
+            note: item.note,
+            observation: item.commentaire,
+            updatedAt: new Date(),
+          },
+          create: {
+            examinateurId,
+            objectifId: item.objectifId,
+            note: item.note,
+            observation: item.commentaire,
+            updatedAt: new Date(),
+          },
+        });
+      }
+    }
+
+    const updated = await this.prisma.fiches_evaluation.update({
+      where: { id },
+      data: {
+        updatedAt: new Date(),
+      },
+      include: {
+        cycles_evaluation: true,
+        utilisateurs_cache: true,
+        objectifs: {
+          include: { indicateurs: true, evaluations: true },
+        },
+        competences: true,
+        feedbacks_360: true,
+        bonus_commissions: true,
+        historique_evaluation: true,
+      },
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: existing.statut,
+        action: 'AUTO_EVALUATION_SOUMISE',
+        commentaire: dto.observations || 'Auto-évaluation mise à jour par le collaborateur',
+        effectueParId: examinateurId,
+        ficheId: id,
+        dateAction: new Date(),
+      },
+    });
+
+    return mapFicheToDto(updated);
+  }
+
   async submitNotesN1(id: string, dto: { notes: Array<{ objectifId: string; note: number }>; observations?: string }, managerId?: string) {
     const existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
