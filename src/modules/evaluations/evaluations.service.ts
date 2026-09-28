@@ -69,7 +69,7 @@ export class EvaluationsService {
   }
 
   async getOne(id: string) {
-    const fiche = await this.prisma.fiches_evaluation.findUnique({
+    let fiche = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
       include: {
         cycles_evaluation: true,
@@ -86,6 +86,27 @@ export class EvaluationsService {
         historique_evaluation: true,
       },
     });
+
+    if (!fiche) {
+      fiche = await this.prisma.fiches_evaluation.findFirst({
+        where: { salarieId: id },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          cycles_evaluation: true,
+          utilisateurs_cache: true,
+          objectifs: {
+            include: {
+              indicateurs: true,
+              evaluations: true,
+            },
+          },
+          competences: true,
+          feedbacks_360: true,
+          bonus_commissions: true,
+          historique_evaluation: true,
+        },
+      });
+    }
 
     if (!fiche) {
       throw new NotFoundException(`Fiche ${id} introuvable`);
@@ -206,19 +227,30 @@ export class EvaluationsService {
     return mapFicheToDto(updated);
   }
 
-  async submitNotesN1(id: string, dto: { notes: Array<{ objectifId: string; note: number }>; observations?: string }, managerId?: string) {
-    const existing = await this.prisma.fiches_evaluation.findUnique({
+  async submitNotesN1(id: string, dto: { notes: Array<{ objectifId: string; note: number; commentaire?: string; observation?: string }>; observations?: string }, managerId?: string) {
+    let existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
       include: { objectifs: true },
     });
 
     if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({
+        where: { salarieId: id },
+        include: { objectifs: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (!existing) {
       throw new NotFoundException(`Fiche ${id} introuvable`);
     }
+
+    const ficheId = existing.id;
 
     // Mettre à jour les notes par objectif
     if (dto.notes && dto.notes.length > 0) {
       for (const item of dto.notes) {
+        const obs = item.commentaire || item.observation || undefined;
         await this.prisma.evaluations.upsert({
           where: {
             examinateurId_objectifId: {
@@ -228,12 +260,14 @@ export class EvaluationsService {
           },
           update: {
             note: item.note,
+            ...(obs ? { observation: obs } : {}),
             updatedAt: new Date(),
           },
           create: {
             examinateurId: managerId || 'mgr-n1',
             objectifId: item.objectifId,
             note: item.note,
+            ...(obs ? { observation: obs } : {}),
             updatedAt: new Date(),
           },
         });
@@ -262,7 +296,7 @@ export class EvaluationsService {
     }
 
     const updated = await this.prisma.fiches_evaluation.update({
-      where: { id },
+      where: { id: ficheId },
       data: {
         statut: 'VISA_SALARIE',
         noteGlobale: noteGlobale,
@@ -289,7 +323,7 @@ export class EvaluationsService {
         action: 'EVALUATION_N1_SOUMISE',
         commentaire: dto.observations || 'Évaluation N+1 validée par le supérieur hiérarchique',
         effectueParId: managerId || 'mgr-n1',
-        ficheId: id,
+        ficheId: ficheId,
         dateAction: new Date(),
       },
     });
