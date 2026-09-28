@@ -59,12 +59,39 @@ export class EvaluationsService {
     });
 
     return fiches.map((f) => ({
+      id: f.id,
       annee: f.cycles_evaluation?.annee || new Date(f.createdAt).getFullYear(),
       libelle: f.cycles_evaluation?.libelle || "Évaluation Annuelle",
       note: f.noteGlobale ? Number(f.noteGlobale) : 0,
       statut: f.statut,
       dateValidation: f.updatedAt.toISOString(),
     }));
+  }
+
+  async getOne(id: string) {
+    const fiche = await this.prisma.fiches_evaluation.findUnique({
+      where: { id },
+      include: {
+        cycles_evaluation: true,
+        utilisateurs_cache: true,
+        objectifs: {
+          include: {
+            indicateurs: true,
+            evaluations: true,
+          },
+        },
+        competences: true,
+        feedbacks_360: true,
+        bonus_commissions: true,
+        historique_evaluation: true,
+      },
+    });
+
+    if (!fiche) {
+      throw new NotFoundException(`Fiche ${id} introuvable`);
+    }
+
+    return mapFicheToDto(fiche);
   }
 
   async signSalarie(id: string, observation: string, userId?: string) {

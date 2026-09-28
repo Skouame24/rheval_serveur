@@ -19,6 +19,11 @@ export class EvaluationsController {
     return this.evaluationsService.getMyHistory(userId, annee, statut);
   }
 
+  @Get('evaluations/:id')
+  async getOne(@Param('id') id: string) {
+    return this.evaluationsService.getOne(id);
+  }
+
   @Post('evaluations/:id/sign-salarie')
   async signSalarie(
     @Param('id') id: string,
