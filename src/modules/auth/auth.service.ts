@@ -49,16 +49,22 @@ export class AuthService {
     });
 
     let n1User = null;
+    let n2User = null;
     if (user.managerId) {
       n1User = await this.prisma.utilisateurs_cache.findUnique({
         where: { id_microsoft: user.managerId },
       });
+      if (n1User?.managerId) {
+        n2User = await this.prisma.utilisateurs_cache.findUnique({
+          where: { id_microsoft: n1User.managerId },
+        });
+      }
     }
 
     return {
       success: true,
       message: 'Session synchronisée avec succès',
-      user: mapUserToDto(user, n1User),
+      user: mapUserToDto(user, n1User, n2User),
     };
   }
 
@@ -89,10 +95,16 @@ export class AuthService {
     }
 
     let n1User = null;
+    let n2User = null;
     if (user.managerId) {
       n1User = await this.prisma.utilisateurs_cache.findUnique({
         where: { id_microsoft: user.managerId },
       });
+      if (n1User?.managerId) {
+        n2User = await this.prisma.utilisateurs_cache.findUnique({
+          where: { id_microsoft: n1User.managerId },
+        });
+      }
     }
 
     const payload = { sub: user.id_microsoft, email: user.email, role: user.role };
