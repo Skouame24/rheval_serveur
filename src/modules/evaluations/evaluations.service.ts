@@ -237,8 +237,12 @@ export class EvaluationsService {
       teamIds = team.map((t) => t.id_microsoft);
     }
 
+    if (!mgrId || teamIds.length === 0) {
+      return [];
+    }
+
     const fiches = await this.prisma.fiches_evaluation.findMany({
-      where: teamIds.length > 0 ? { salarieId: { in: teamIds } } : {},
+      where: { salarieId: { in: teamIds } },
       include: {
         cycles_evaluation: true,
         utilisateurs_cache: true,
