@@ -240,17 +240,31 @@ export class EvaluationsService {
       }
     }
 
-    // Calcul de la note globale moyenne
+    // Calcul de la note globale pondérée
     let noteGlobale = existing.noteGlobale;
     if (dto.notes && dto.notes.length > 0) {
-      const sum = dto.notes.reduce((acc, curr) => acc + Number(curr.note), 0);
-      noteGlobale = (sum / dto.notes.length) as any;
+      let totalPond = 0;
+      let sumPond = 0;
+      for (const item of dto.notes) {
+        const obj = existing.objectifs.find((o) => o.id === item.objectifId);
+        const p = Number(obj?.ponderation) || 0;
+        if (p > 0) {
+          sumPond += Number(item.note) * (p / 100);
+          totalPond += p;
+        }
+      }
+      if (totalPond > 0) {
+        noteGlobale = Number(sumPond.toFixed(2)) as any;
+      } else {
+        const sum = dto.notes.reduce((acc, curr) => acc + Number(curr.note), 0);
+        noteGlobale = Number((sum / dto.notes.length).toFixed(2)) as any;
+      }
     }
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id },
       data: {
-        statut: 'EN_ATTENTE_N2',
+        statut: 'VISA_SALARIE',
         noteGlobale: noteGlobale,
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
@@ -265,6 +279,18 @@ export class EvaluationsService {
         feedbacks_360: true,
         bonus_commissions: true,
         historique_evaluation: true,
+      },
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: 'VISA_SALARIE',
+        action: 'EVALUATION_N1_SOUMISE',
+        commentaire: dto.observations || 'Évaluation N+1 validée par le supérieur hiérarchique',
+        effectueParId: managerId || 'mgr-n1',
+        ficheId: id,
+        dateAction: new Date(),
       },
     });
 
