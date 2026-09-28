@@ -1,10 +1,60 @@
 export function mapFicheToDto(f: any): any {
   if (!f) return null;
 
+  // Calcul dynamique de la note d'auto-évaluation et note N+1 depuis les objectifs et évaluations
+  let totalPonderationAuto = 0;
+  let sumPondereeAuto = 0;
+  let hasAutoEvaluations = false;
+
+  const mappedObjectifs = (f.objectifs || []).map((o: any) => {
+    const evalSal = (o.evaluations || []).find(
+      (e: any) => e.examinateurId === f.salarieId || e.type === 'SALARIE'
+    );
+    const evalN1 = (o.evaluations || []).find(
+      (e: any) => e.examinateurId !== f.salarieId && e.type !== 'SALARIE'
+    );
+
+    const pond = o.ponderation !== undefined && o.ponderation !== null ? Number(o.ponderation) : 0;
+    const noteSal = evalSal?.note !== undefined && evalSal?.note !== null ? Number(evalSal.note) : undefined;
+    const noteN1 = evalN1?.note !== undefined && evalN1?.note !== null ? Number(evalN1.note) : (o.noteGlobale ? Number(o.noteGlobale) : undefined);
+
+    if (noteSal !== undefined) {
+      hasAutoEvaluations = true;
+      sumPondereeAuto += noteSal * (pond / 100);
+      totalPonderationAuto += pond;
+    }
+
+    return {
+      id: o.id,
+      intitule: o.intitule,
+      description: o.description || '',
+      ponderation: pond,
+      noteSalarie: noteSal,
+      commentaireSalarie: evalSal?.observation || '',
+      noteObtenue: noteN1,
+      commentaire: evalN1?.observation || '',
+      noteGlobale: noteN1,
+      indicateurs: o.indicateurs || [],
+      evaluations: o.evaluations || [],
+    };
+  });
+
+  const noteAutoEvaluation = hasAutoEvaluations && totalPonderationAuto > 0
+    ? Number(sumPondereeAuto.toFixed(2))
+    : undefined;
+
+  // Si le salarié a auto-évalué et le statut est encore FIXATION_OBJECTIFS, on avance dynamiquement à EN_ATTENTE_N1
+  let resolvedStatut = f.statut;
+  if (resolvedStatut === 'FIXATION_OBJECTIFS' && hasAutoEvaluations) {
+    resolvedStatut = 'EN_ATTENTE_N1';
+  }
+
   return {
     id: f.id,
-    statut: f.statut,
+    statut: resolvedStatut,
     noteGlobale: f.noteGlobale ? Number(f.noteGlobale) : undefined,
+    noteAutoEvaluation: noteAutoEvaluation,
+    hasAutoEvaluation: hasAutoEvaluations,
     observation: f.observation || '',
     cycleId: f.cycleId,
     salarieId: f.salarieId,
@@ -29,15 +79,7 @@ export function mapFicheToDto(f: any): any {
           poste: f.utilisateurs_cache.poste || '',
         }
       : { id: f.salarieId, nom: 'Salarié', prenom: '', email: '', role: 'SALARIE', poste: '' },
-    objectifs: (f.objectifs || []).map((o: any) => ({
-      id: o.id,
-      intitule: o.intitule,
-      description: o.description || '',
-      ponderation: o.ponderation !== undefined && o.ponderation !== null ? Number(o.ponderation) : 0,
-      noteGlobale: o.noteGlobale ? Number(o.noteGlobale) : undefined,
-      indicateurs: o.indicateurs || [],
-      evaluations: o.evaluations || [],
-    })),
+    objectifs: mappedObjectifs,
     competences: f.competences || [],
     feedbacks360: f.feedbacks_360 || [],
     bonus: f.bonus_commissions || null,

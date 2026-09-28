@@ -174,6 +174,8 @@ export class EvaluationsService {
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id },
       data: {
+        statut: 'EN_ATTENTE_N1',
+        observation: dto.observations || existing.observation,
         updatedAt: new Date(),
       },
       include: {
