@@ -83,6 +83,7 @@ model fiches_evaluation {
   historique_evaluation historique_evaluation[]
   objectifs             objectifs[]
   suggestions           suggestions[]
+  formations            formations[]
 }
 
 model historique_evaluation {
@@ -125,6 +126,19 @@ model suggestions {
   observation       String
   ficheId           String
   createdAt         DateTime          @default(now())
+  fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model formations {
+  id                String            @id
+  intitule          String
+  delai             String?           @default("")
+  priorite          String?           @default("MOYENNE")
+  objectifVise      String?           @default("")
+  statut            String            @default("DEMANDE")
+  ficheId           String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
 }
 

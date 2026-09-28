@@ -2,6 +2,22 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapFicheToDto } from '../../common/fiche.mapper';
 
+const FICHE_INCLUDE = {
+  cycles_evaluation: true,
+  utilisateurs_cache: true,
+  objectifs: {
+    include: {
+      indicateurs: true,
+      evaluations: true,
+    },
+  },
+  competences: true,
+  formations: true,
+  feedbacks_360: true,
+  bonus_commissions: true,
+  historique_evaluation: true,
+};
+
 @Injectable()
 export class EvaluationsService {
   constructor(private prisma: PrismaService) {}
@@ -18,20 +34,7 @@ export class EvaluationsService {
     const fiche = await this.prisma.fiches_evaluation.findFirst({
       where: { salarieId: uId },
       orderBy: { createdAt: 'desc' },
-      include: {
-        cycles_evaluation: true,
-        utilisateurs_cache: true,
-        objectifs: {
-          include: {
-            indicateurs: true,
-            evaluations: true,
-          },
-        },
-        competences: true,
-        feedbacks_360: true,
-        bonus_commissions: true,
-        historique_evaluation: true,
-      },
+      include: FICHE_INCLUDE,
     });
 
     if (!fiche) return null;
@@ -71,40 +74,14 @@ export class EvaluationsService {
   async getOne(id: string) {
     let fiche = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
-      include: {
-        cycles_evaluation: true,
-        utilisateurs_cache: true,
-        objectifs: {
-          include: {
-            indicateurs: true,
-            evaluations: true,
-          },
-        },
-        competences: true,
-        feedbacks_360: true,
-        bonus_commissions: true,
-        historique_evaluation: true,
-      },
+      include: FICHE_INCLUDE,
     });
 
     if (!fiche) {
       fiche = await this.prisma.fiches_evaluation.findFirst({
         where: { salarieId: id },
         orderBy: { createdAt: 'desc' },
-        include: {
-          cycles_evaluation: true,
-          utilisateurs_cache: true,
-          objectifs: {
-            include: {
-              indicateurs: true,
-              evaluations: true,
-            },
-          },
-          competences: true,
-          feedbacks_360: true,
-          bonus_commissions: true,
-          historique_evaluation: true,
-        },
+        include: FICHE_INCLUDE,
       });
     }
 
@@ -199,17 +176,7 @@ export class EvaluationsService {
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
       },
-      include: {
-        cycles_evaluation: true,
-        utilisateurs_cache: true,
-        objectifs: {
-          include: { indicateurs: true, evaluations: true },
-        },
-        competences: true,
-        feedbacks_360: true,
-        bonus_commissions: true,
-        historique_evaluation: true,
-      },
+      include: FICHE_INCLUDE,
     });
 
     await this.prisma.historique_evaluation.create({
@@ -227,7 +194,15 @@ export class EvaluationsService {
     return mapFicheToDto(updated);
   }
 
-  async submitNotesN1(id: string, dto: { notes: Array<{ objectifId: string; note: number; commentaire?: string; observation?: string }>; observations?: string }, managerId?: string) {
+  async submitNotesN1(
+    id: string,
+    dto: {
+      notes: Array<{ objectifId: string; note: number; commentaire?: string; observation?: string }>;
+      formations?: Array<{ id?: string; intitule?: string; formation?: string; delai?: string; priorite?: string; objectifVise?: string }>;
+      observations?: string;
+    },
+    managerId?: string
+  ) {
     let existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
       include: { objectifs: true },
@@ -274,6 +249,25 @@ export class EvaluationsService {
       }
     }
 
+    // Mettre à jour les formations préconisées par le N+1
+    if (dto.formations !== undefined && Array.isArray(dto.formations)) {
+      await this.prisma.formations.deleteMany({ where: { ficheId } });
+      if (dto.formations.length > 0) {
+        await this.prisma.formations.createMany({
+          data: dto.formations.map((f: any) => ({
+            id: f.id && !f.id.startsWith('temp-') ? f.id : 'form-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+            ficheId: ficheId,
+            intitule: f.intitule || f.formation || '',
+            delai: f.delai || '',
+            priorite: f.priorite || 'MOYENNE',
+            objectifVise: f.objectifVise || '',
+            statut: f.statut || 'DEMANDE',
+            updatedAt: new Date(),
+          })),
+        });
+      }
+    }
+
     // Calcul de la note globale pondérée
     let noteGlobale = existing.noteGlobale;
     if (dto.notes && dto.notes.length > 0) {
@@ -303,17 +297,7 @@ export class EvaluationsService {
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
       },
-      include: {
-        cycles_evaluation: true,
-        utilisateurs_cache: true,
-        objectifs: {
-          include: { indicateurs: true, evaluations: true },
-        },
-        competences: true,
-        feedbacks_360: true,
-        bonus_commissions: true,
-        historique_evaluation: true,
-      },
+      include: FICHE_INCLUDE,
     });
 
     await this.prisma.historique_evaluation.create({
@@ -347,17 +331,7 @@ export class EvaluationsService {
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
       },
-      include: {
-        cycles_evaluation: true,
-        utilisateurs_cache: true,
-        objectifs: {
-          include: { indicateurs: true, evaluations: true },
-        },
-        competences: true,
-        feedbacks_360: true,
-        bonus_commissions: true,
-        historique_evaluation: true,
-      },
+      include: FICHE_INCLUDE,
     });
 
     return mapFicheToDto(updated);
@@ -365,17 +339,7 @@ export class EvaluationsService {
 
   async getAllForRh() {
     const fiches = await this.prisma.fiches_evaluation.findMany({
-      include: {
-        cycles_evaluation: true,
-        utilisateurs_cache: true,
-        objectifs: {
-          include: { indicateurs: true, evaluations: true },
-        },
-        competences: true,
-        feedbacks_360: true,
-        bonus_commissions: true,
-        historique_evaluation: true,
-      },
+      include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -406,20 +370,42 @@ export class EvaluationsService {
 
     const fiches = await this.prisma.fiches_evaluation.findMany({
       where: { salarieId: { in: teamIds } },
-      include: {
-        cycles_evaluation: true,
-        utilisateurs_cache: true,
-        objectifs: {
-          include: { indicateurs: true, evaluations: true },
-        },
-        competences: true,
-        feedbacks_360: true,
-        bonus_commissions: true,
-        historique_evaluation: true,
-      },
+      include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
     return fiches.map(mapFicheToDto);
+  }
+
+  async addFormation(ficheId: string, dto: { intitule: string; delai?: string; priorite?: string; objectifVise?: string }) {
+    let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id: ficheId } });
+    if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: ficheId }, orderBy: { createdAt: 'desc' } });
+    }
+    if (!existing) {
+      throw new NotFoundException(`Fiche ${ficheId} introuvable`);
+    }
+
+    const created = await this.prisma.formations.create({
+      data: {
+        id: 'form-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+        ficheId: existing.id,
+        intitule: dto.intitule,
+        delai: dto.delai || '',
+        priorite: dto.priorite || 'MOYENNE',
+        objectifVise: dto.objectifVise || '',
+        statut: 'DEMANDE',
+        updatedAt: new Date(),
+      },
+    });
+
+    return created;
+  }
+
+  async deleteFormation(ficheId: string, formationId: string) {
+    await this.prisma.formations.deleteMany({
+      where: { id: formationId },
+    });
+    return { success: true };
   }
 }

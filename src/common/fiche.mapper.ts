@@ -1,9 +1,6 @@
 export function mapFicheToDto(f: any): any {
   if (!f) return null;
 
-  const count = (f.objectifs || []).length || 1;
-  const defaultPond = Math.round(100 / count);
-
   // Calcul dynamique de la note d'auto-évaluation et note N+1 depuis les objectifs et évaluations
   let totalPonderationAuto = 0;
   let sumPondereeAuto = 0;
@@ -17,8 +14,7 @@ export function mapFicheToDto(f: any): any {
       (e: any) => e.examinateurId !== f.salarieId && e.type !== 'SALARIE'
     );
 
-    const rawPond = Number(o.ponderation);
-    const pond = Number.isFinite(rawPond) && rawPond > 0 ? rawPond : defaultPond;
+    const pond = o.ponderation !== undefined && o.ponderation !== null ? Number(o.ponderation) : 0;
     const noteSal = evalSal?.note !== undefined && evalSal?.note !== null ? Number(evalSal.note) : undefined;
     const noteN1 = evalN1?.note !== undefined && evalN1?.note !== null ? Number(evalN1.note) : (o.noteGlobale ? Number(o.noteGlobale) : undefined);
 
@@ -30,7 +26,6 @@ export function mapFicheToDto(f: any): any {
 
     return {
       id: o.id,
-      ficheId: f.id,
       intitule: o.intitule,
       description: o.description || '',
       ponderation: pond,
@@ -44,13 +39,8 @@ export function mapFicheToDto(f: any): any {
     };
   });
 
-  const noteAutoEvaluation = hasAutoEvaluations
-    ? (totalPonderationAuto > 0
-        ? Number(sumPondereeAuto.toFixed(2))
-        : Number(((f.objectifs || []).reduce((acc: number, o: any) => {
-            const e = (o.evaluations || []).find((ev: any) => ev.examinateurId === f.salarieId || ev.type === 'SALARIE');
-            return acc + (e?.note ? Number(e.note) : 0);
-          }, 0) / count).toFixed(2)))
+  const noteAutoEvaluation = hasAutoEvaluations && totalPonderationAuto > 0
+    ? Number(sumPondereeAuto.toFixed(2))
     : undefined;
 
   // Si le salarié a auto-évalué et le statut est encore FIXATION_OBJECTIFS, on avance dynamiquement à EN_ATTENTE_N1
@@ -90,6 +80,15 @@ export function mapFicheToDto(f: any): any {
         }
       : { id: f.salarieId, nom: 'Salarié', prenom: '', email: '', role: 'SALARIE', poste: '' },
     objectifs: mappedObjectifs,
+    formations: (f.formations || []).map((fm: any) => ({
+      id: fm.id,
+      ficheId: fm.ficheId,
+      intitule: fm.intitule,
+      delai: fm.delai || '',
+      priorite: fm.priorite || 'MOYENNE',
+      objectifVise: fm.objectifVise || '',
+      statut: fm.statut || 'DEMANDE',
+    })),
     competences: f.competences || [],
     feedbacks360: f.feedbacks_360 || [],
     bonus: f.bonus_commissions || null,

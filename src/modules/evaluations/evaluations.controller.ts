@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Headers } from '@nestjs/common';
 import { EvaluationsService } from './evaluations.service';
 
 @Controller()
@@ -49,6 +49,22 @@ export class EvaluationsController {
     @Headers('x-user-id') managerId?: string,
   ) {
     return this.evaluationsService.submitNotesN1(id, body, managerId);
+  }
+
+  @Post('evaluations/:id/formations')
+  async addFormation(
+    @Param('id') id: string,
+    @Body() body: { intitule: string; delai?: string; priorite?: string; objectifVise?: string },
+  ) {
+    return this.evaluationsService.addFormation(id, body);
+  }
+
+  @Delete('evaluations/:id/formations/:formationId')
+  async deleteFormation(
+    @Param('id') id: string,
+    @Param('formationId') formationId: string,
+  ) {
+    return this.evaluationsService.deleteFormation(id, formationId);
   }
 
   @Put('n2/evaluations/:id')
