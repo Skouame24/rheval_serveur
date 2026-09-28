@@ -108,6 +108,8 @@ model indicateurs {
 model objectifs {
   id                String            @id
   intitule          String
+  description       String?           @default("")
+  ponderation       Int?              @default(0)
   noteGlobale       Decimal?          @db.Decimal(4, 2)
   ficheId           String
   createdAt         DateTime          @default(now())

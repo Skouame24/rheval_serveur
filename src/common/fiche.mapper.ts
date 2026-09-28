@@ -32,6 +32,8 @@ export function mapFicheToDto(f: any): any {
     objectifs: (f.objectifs || []).map((o: any) => ({
       id: o.id,
       intitule: o.intitule,
+      description: o.description || '',
+      ponderation: o.ponderation !== undefined && o.ponderation !== null ? Number(o.ponderation) : 0,
       noteGlobale: o.noteGlobale ? Number(o.noteGlobale) : undefined,
       indicateurs: o.indicateurs || [],
       evaluations: o.evaluations || [],
