@@ -195,7 +195,7 @@ export class EvaluationsService {
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id },
       data: {
-        statut: 'EN_ATTENTE_N1',
+        statut: 'EVALUATION_N1',
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
       },
@@ -315,7 +315,7 @@ export class EvaluationsService {
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: ficheId },
       data: {
-        statut: 'VALIDATION_N2',
+        statut: 'EVALUATION_N2',
         noteGlobale: noteGlobale,
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
@@ -326,7 +326,7 @@ export class EvaluationsService {
     await this.prisma.historique_evaluation.create({
       data: {
         id: 'hist-' + Date.now(),
-        statutFiche: 'VALIDATION_N2',
+        statutFiche: 'EVALUATION_N2',
         action: 'EVALUATION_N1_SOUMISE',
         commentaire: dto.observations || 'Évaluation N+1 validée et transmise à la Direction N+2 pour revue',
         effectueParId: managerId || 'mgr-n1',
