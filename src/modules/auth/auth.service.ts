@@ -23,30 +23,45 @@ export class AuthService {
   }) {
     const fullName = `${data.prenom ? data.prenom + ' ' : ''}${data.nom}`.trim();
 
-    const user = await this.prisma.utilisateurs_cache.upsert({
+    let user = await this.prisma.utilisateurs_cache.findUnique({
       where: { id_microsoft: data.id_microsoft },
-      update: {
-        nom: fullName || data.nom,
-        email: data.email,
-        poste: data.poste,
-        departement: data.departement,
-        telephone: data.telephone,
-        ...(data.role ? { role: data.role } : {}),
-        ...(data.managerId ? { managerId: data.managerId } : {}),
-        updatedAt: new Date(),
-      },
-      create: {
-        id_microsoft: data.id_microsoft,
-        nom: fullName || data.nom,
-        email: data.email,
-        poste: data.poste,
-        departement: data.departement,
-        telephone: data.telephone,
-        role: data.role || 'SALARIE',
-        managerId: data.managerId,
-        updatedAt: new Date(),
-      },
     });
+
+    if (!user && data.email) {
+      user = await this.prisma.utilisateurs_cache.findUnique({
+        where: { email: data.email },
+      });
+    }
+
+    if (user) {
+      user = await this.prisma.utilisateurs_cache.update({
+        where: { id_microsoft: user.id_microsoft },
+        data: {
+          nom: fullName || data.nom || user.nom,
+          ...(data.email ? { email: data.email } : {}),
+          ...(data.poste ? { poste: data.poste } : {}),
+          ...(data.departement ? { departement: data.departement } : {}),
+          ...(data.telephone ? { telephone: data.telephone } : {}),
+          ...(data.role ? { role: data.role } : {}),
+          ...(data.managerId ? { managerId: data.managerId } : {}),
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      user = await this.prisma.utilisateurs_cache.create({
+        data: {
+          id_microsoft: data.id_microsoft,
+          nom: fullName || data.nom,
+          email: data.email,
+          poste: data.poste,
+          departement: data.departement,
+          telephone: data.telephone,
+          role: data.role || 'SALARIE',
+          managerId: data.managerId,
+          updatedAt: new Date(),
+        },
+      });
+    }
 
     let n1User = null;
     let n2User = null;

@@ -32,11 +32,29 @@ export class EvaluationsService {
 
     if (!uId) return null;
 
-    const fiche = await this.prisma.fiches_evaluation.findFirst({
+    let fiche = await this.prisma.fiches_evaluation.findFirst({
       where: { salarieId: uId },
       orderBy: { createdAt: 'desc' },
       include: FICHE_INCLUDE,
     });
+
+    if (!fiche) {
+      const user = await this.prisma.utilisateurs_cache.findFirst({
+        where: {
+          OR: [
+            { id_microsoft: uId },
+            { email: { contains: uId, mode: 'insensitive' } },
+          ],
+        },
+      });
+      if (user) {
+        fiche = await this.prisma.fiches_evaluation.findFirst({
+          where: { salarieId: user.id_microsoft },
+          orderBy: { createdAt: 'desc' },
+          include: FICHE_INCLUDE,
+        });
+      }
+    }
 
     if (!fiche) return null;
     return mapFicheToDto(fiche);
