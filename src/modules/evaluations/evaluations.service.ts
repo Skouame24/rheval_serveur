@@ -93,6 +93,10 @@ export class EvaluationsService {
   }
 
   async signSalarie(id: string, observation: string, userId?: string) {
+    return this.submitVisaSalarie(id, { accord: true, observation }, userId);
+  }
+
+  async submitVisaSalarie(id: string, dto: { accord: boolean; observation?: string }, userId?: string) {
     const existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
     });
@@ -101,31 +105,31 @@ export class EvaluationsService {
       throw new NotFoundException(`Fiche d'évaluation ${id} introuvable`);
     }
 
-    await this.prisma.fiches_evaluation.update({
+    const nextStatut = dto.accord === false ? 'ARBITRAGE' : 'VALIDATION_N2';
+
+    const updated = await this.prisma.fiches_evaluation.update({
       where: { id },
       data: {
-        statut: 'VISA_SALARIE',
-        observation: observation || existing.observation,
+        statut: nextStatut,
+        observation: dto.observation || existing.observation,
         updatedAt: new Date(),
       },
+      include: FICHE_INCLUDE,
     });
 
     await this.prisma.historique_evaluation.create({
       data: {
         id: 'hist-' + Date.now(),
-        statutFiche: 'VISA_SALARIE',
-        action: 'SIGNATURE_SALARIE',
-        commentaire: observation,
+        statutFiche: nextStatut,
+        action: dto.accord === false ? 'VISA_SALARIE_DESACCORD' : 'VISA_SALARIE_ACCORD',
+        commentaire: dto.observation || (dto.accord ? 'Visa Salarié accordé sans réserve' : 'Visa Salarié avec désaccord / réserves'),
         effectueParId: userId || existing.salarieId,
         ficheId: id,
         dateAction: new Date(),
       },
     });
 
-    return {
-      success: true,
-      message: 'Signature enregistrée avec succès',
-    };
+    return mapFicheToDto(updated);
   }
 
   async submitAutoEvaluation(
@@ -315,23 +319,127 @@ export class EvaluationsService {
     return mapFicheToDto(updated);
   }
 
-  async submitNotesN2(id: string, dto: { notes: Array<{ objectifId: string; note: number }>; observations?: string }, n2Id?: string) {
-    const existing = await this.prisma.fiches_evaluation.findUnique({
+  async submitNotesN2(
+    id: string,
+    dto: {
+      notes?: Array<{ objectifId: string; note: number; commentaire?: string }>;
+      observations?: string;
+      decision?: 'APPROUVE' | 'ARBITRAGE';
+    },
+    n2Id?: string,
+  ) {
+    let existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
     });
+
+    if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({
+        where: { salarieId: id },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     if (!existing) {
       throw new NotFoundException(`Fiche ${id} introuvable`);
     }
 
+    const examinateurId = n2Id || 'drh-id-1234';
+
+    if (dto.notes && dto.notes.length > 0) {
+      for (const item of dto.notes) {
+        await this.prisma.evaluations.upsert({
+          where: {
+            examinateurId_objectifId: {
+              examinateurId,
+              objectifId: item.objectifId,
+            },
+          },
+          update: {
+            note: item.note,
+            observation: item.commentaire,
+            updatedAt: new Date(),
+          },
+          create: {
+            examinateurId,
+            objectifId: item.objectifId,
+            note: item.note,
+            observation: item.commentaire,
+            updatedAt: new Date(),
+          },
+        });
+      }
+    }
+
+    const nextStatut = dto.decision === 'ARBITRAGE' ? 'ARBITRAGE' : 'VALIDATION_DRH';
+
     const updated = await this.prisma.fiches_evaluation.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
-        statut: 'VALIDATION_DRH',
+        statut: nextStatut,
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
       },
       include: FICHE_INCLUDE,
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: nextStatut,
+        action: dto.decision === 'ARBITRAGE' ? 'ARBITRAGE_DEMANDE_N2' : 'CONTRE_EVALUATION_N2',
+        commentaire: dto.observations || (dto.decision === 'ARBITRAGE' ? "Arbitrage requis par le N+2 suite à un écart de notation" : 'Contre-évaluation et Visa N+2 validés'),
+        effectueParId: examinateurId,
+        ficheId: existing.id,
+        dateAction: new Date(),
+      },
+    });
+
+    return mapFicheToDto(updated);
+  }
+
+  async validerParRh(
+    id: string,
+    dto: { statut?: 'VALIDE' | 'CLOTURE' | 'ARBITRAGE'; commentaire?: string; noteFinale?: number },
+    rhId?: string,
+  ) {
+    let existing = await this.prisma.fiches_evaluation.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({
+        where: { salarieId: id },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (!existing) {
+      throw new NotFoundException(`Fiche ${id} introuvable`);
+    }
+
+    const targetStatut = dto.statut || 'VALIDE';
+
+    const updated = await this.prisma.fiches_evaluation.update({
+      where: { id: existing.id },
+      data: {
+        statut: targetStatut,
+        noteGlobale: dto.noteFinale !== undefined ? (dto.noteFinale as any) : existing.noteGlobale,
+        observation: dto.commentaire || existing.observation,
+        updatedAt: new Date(),
+      },
+      include: FICHE_INCLUDE,
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: targetStatut,
+        action: targetStatut === 'ARBITRAGE' ? 'ARBITRAGE_RH' : 'VALIDATION_FINALE_DRH',
+        commentaire: dto.commentaire || 'Validation finale et clôture de la fiche d\'évaluation par la Direction RH',
+        effectueParId: rhId || 'drh-id-1234',
+        ficheId: existing.id,
+        dateAction: new Date(),
+      },
     });
 
     return mapFicheToDto(updated);
@@ -343,6 +451,15 @@ export class EvaluationsService {
       orderBy: { createdAt: 'desc' },
     });
 
+    return fiches.map(mapFicheToDto);
+  }
+
+  async getN2TeamEvaluations(n2Id?: string) {
+    // Supervision N+2 : renvoie toutes les fiches du périmètre N+2
+    const fiches = await this.prisma.fiches_evaluation.findMany({
+      include: FICHE_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
     return fiches.map(mapFicheToDto);
   }
 

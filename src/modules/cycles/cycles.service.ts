@@ -16,7 +16,7 @@ export class CyclesService {
 
   async getActif() {
     const cycle = await this.prisma.cycles_evaluation.findFirst({
-      where: { statut: 'ACTIF' },
+      where: { statut: { in: ['ACTIF', 'EN_COURS'] } },
       include: {
         fiches_evaluation: true,
       },
@@ -26,6 +26,9 @@ export class CyclesService {
       // Si aucun cycle actif explicite, renvoyer le plus récent
       return this.prisma.cycles_evaluation.findFirst({
         orderBy: { annee: 'desc' },
+        include: {
+          fiches_evaluation: true,
+        },
       });
     }
 

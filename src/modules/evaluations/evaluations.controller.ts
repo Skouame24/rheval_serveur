@@ -67,6 +67,15 @@ export class EvaluationsController {
     return this.evaluationsService.deleteFormation(id, formationId);
   }
 
+  @Post('evaluations/:id/visa-salarie')
+  async submitVisaSalarie(
+    @Param('id') id: string,
+    @Body() body: { accord: boolean; observation?: string },
+    @Headers('x-user-id') userId?: string,
+  ) {
+    return this.evaluationsService.submitVisaSalarie(id, body, userId);
+  }
+
   @Put('n2/evaluations/:id')
   async submitNotesN2(
     @Param('id') id: string,
@@ -74,6 +83,20 @@ export class EvaluationsController {
     @Headers('x-user-id') n2Id?: string,
   ) {
     return this.evaluationsService.submitNotesN2(id, body, n2Id);
+  }
+
+  @Get('n2/evaluations')
+  async getN2TeamEvaluations(@Headers('x-user-id') n2Id?: string) {
+    return this.evaluationsService.getN2TeamEvaluations(n2Id);
+  }
+
+  @Put('rh/evaluations/:id/valider')
+  async validerParRh(
+    @Param('id') id: string,
+    @Body() body: { statut?: 'VALIDE' | 'CLOTURE' | 'ARBITRAGE'; commentaire?: string; noteFinale?: number },
+    @Headers('x-user-id') rhId?: string,
+  ) {
+    return this.evaluationsService.validerParRh(id, body, rhId);
   }
 
   @Get('rh/evaluations')
