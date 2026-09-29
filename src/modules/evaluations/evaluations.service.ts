@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapFicheToDto } from '../../common/fiche.mapper';
+import { getSubordinateIds } from '../../common/hierarchy.helper';
 
 const FICHE_INCLUDE = {
   cycles_evaluation: true,
@@ -296,7 +297,7 @@ export class EvaluationsService {
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: ficheId },
       data: {
-        statut: 'VISA_SALARIE',
+        statut: 'VALIDATION_N2',
         noteGlobale: noteGlobale,
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
@@ -307,9 +308,9 @@ export class EvaluationsService {
     await this.prisma.historique_evaluation.create({
       data: {
         id: 'hist-' + Date.now(),
-        statutFiche: 'VISA_SALARIE',
+        statutFiche: 'VALIDATION_N2',
         action: 'EVALUATION_N1_SOUMISE',
-        commentaire: dto.observations || 'Évaluation N+1 validée par le supérieur hiérarchique',
+        commentaire: dto.observations || 'Évaluation N+1 validée et transmise à la Direction N+2 pour revue',
         effectueParId: managerId || 'mgr-n1',
         ficheId: ficheId,
         dateAction: new Date(),
@@ -474,22 +475,30 @@ export class EvaluationsService {
 
     let teamIds: string[] = [];
     if (mgrId) {
-      const team = await this.prisma.utilisateurs_cache.findMany({
-        where: { managerId: mgrId },
-        select: { id_microsoft: true },
+      teamIds = await getSubordinateIds(this.prisma, mgrId);
+    }
+
+    let fiches: any[] = [];
+    if (teamIds.length > 0) {
+      fiches = await this.prisma.fiches_evaluation.findMany({
+        where: { salarieId: { in: teamIds } },
+        include: FICHE_INCLUDE,
+        orderBy: { createdAt: 'desc' },
       });
-      teamIds = team.map((t) => t.id_microsoft);
     }
 
-    if (!mgrId || teamIds.length === 0) {
-      return [];
+    // Fallback : si l'utilisateur est DRH ou N2 ou si aucun subordonné direct n'est trouvé
+    if (fiches.length === 0 && mgrId) {
+      const mgrUser = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: mgrId },
+      });
+      if (mgrUser?.role === 'DRH' || mgrUser?.role === 'RH' || mgrUser?.role === 'N2') {
+        fiches = await this.prisma.fiches_evaluation.findMany({
+          include: FICHE_INCLUDE,
+          orderBy: { createdAt: 'desc' },
+        });
+      }
     }
-
-    const fiches = await this.prisma.fiches_evaluation.findMany({
-      where: { salarieId: { in: teamIds } },
-      include: FICHE_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
 
     return fiches.map(mapFicheToDto);
   }

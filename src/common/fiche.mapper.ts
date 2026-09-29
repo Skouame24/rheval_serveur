@@ -7,24 +7,16 @@ export function mapFicheToDto(f: any): any {
   let hasAutoEvaluations = false;
 
   const mappedObjectifs = (f.objectifs || []).map((o: any) => {
-    const allEvals = o.evaluations || [];
-    const evalSal = allEvals.find(
+    const evalSal = (o.evaluations || []).find(
       (e: any) => e.examinateurId === f.salarieId || e.type === 'SALARIE'
     );
-    const nonSalEvals = allEvals.filter(
+    const evalN1 = (o.evaluations || []).find(
       (e: any) => e.examinateurId !== f.salarieId && e.type !== 'SALARIE'
-    );
-    const evalN1 = nonSalEvals.find(
-      (e: any) => e.examinateurId === f.utilisateurs_cache?.managerId || !e.examinateurId?.includes('n2')
-    ) || nonSalEvals[0];
-    const evalN2 = nonSalEvals.find(
-      (e: any) => e !== evalN1 && (e.examinateurId?.includes('n2') || e.examinateurId === 'drh-id-1234' || e.examinateurId !== evalN1?.examinateurId)
     );
 
     const pond = o.ponderation !== undefined && o.ponderation !== null ? Number(o.ponderation) : 0;
     const noteSal = evalSal?.note !== undefined && evalSal?.note !== null ? Number(evalSal.note) : undefined;
     const noteN1 = evalN1?.note !== undefined && evalN1?.note !== null ? Number(evalN1.note) : (o.noteGlobale ? Number(o.noteGlobale) : undefined);
-    const noteN2 = evalN2?.note !== undefined && evalN2?.note !== null ? Number(evalN2.note) : undefined;
 
     if (noteSal !== undefined) {
       hasAutoEvaluations = true;
@@ -41,8 +33,6 @@ export function mapFicheToDto(f: any): any {
       commentaireSalarie: evalSal?.observation || '',
       noteObtenue: noteN1,
       commentaire: evalN1?.observation || '',
-      noteN2: noteN2,
-      commentaireN2: evalN2?.observation || '',
       noteGlobale: noteN1,
       indicateurs: o.indicateurs || [],
       evaluations: o.evaluations || [],
@@ -99,7 +89,7 @@ export function mapFicheToDto(f: any): any {
       objectifVise: form.objectifVise || '',
       statut: form.statut || 'DEMANDE',
       ficheId: form.ficheId,
-      createdAt: form.createdAt ? new Date(form.createdAt).toISOString() : '',
+      createdAt: form.createdAt ? new Date(form.createdAt).toISOString() : undefined,
     })),
     feedbacks360: f.feedbacks_360 || [],
     bonus: f.bonus_commissions || null,

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapUserToDto } from '../../common/user.mapper';
+import { getSubordinateIds } from '../../common/hierarchy.helper';
 
 @Injectable()
 export class EmployeesService {
@@ -72,16 +73,19 @@ export class EmployeesService {
       mgrId = mgr?.id_microsoft;
     }
 
-    // Récupérer les collaborateurs directs dont managerId correspond
-    let team = [];
+    let team: any[] = [];
     if (mgrId) {
-      team = await this.prisma.utilisateurs_cache.findMany({
-        where: { managerId: mgrId },
-      });
+      // Récupérer tous les subordonnés directs et indirects (N-1, N-2, N-3)
+      const subordinateIds = await getSubordinateIds(this.prisma, mgrId);
+      if (subordinateIds.length > 0) {
+        team = await this.prisma.utilisateurs_cache.findMany({
+          where: { id_microsoft: { in: subordinateIds } },
+        });
+      }
     }
 
-    // Si aucun collaborateur rattaché spécifiquement, on renvoie les autres utilisateurs
-    if (team.length === 0) {
+    // Si aucun subordonné dans l'arbre ou si profil DRH/RH, on renvoie les autres utilisateurs
+    if (team.length === 0 && mgrId) {
       team = await this.prisma.utilisateurs_cache.findMany({
         where: { id_microsoft: { not: mgrId } },
       });
@@ -91,7 +95,24 @@ export class EmployeesService {
   }
 
   async getN2Subordinates(n2Id?: string) {
-    // Tous les utilisateurs N-1 et N-2
+    let mgrId = n2Id;
+    if (!mgrId) {
+      const n2User = await this.prisma.utilisateurs_cache.findFirst({
+        where: { role: { in: ['N2', 'DRH'] } },
+      });
+      mgrId = n2User?.id_microsoft;
+    }
+
+    if (mgrId) {
+      const subordinateIds = await getSubordinateIds(this.prisma, mgrId);
+      if (subordinateIds.length > 0) {
+        const users = await this.prisma.utilisateurs_cache.findMany({
+          where: { id_microsoft: { in: subordinateIds } },
+        });
+        return users.map((u) => mapUserToDto(u));
+      }
+    }
+
     const all = await this.prisma.utilisateurs_cache.findMany();
     return all.map((u) => mapUserToDto(u));
   }
