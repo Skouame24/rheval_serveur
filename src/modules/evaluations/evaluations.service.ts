@@ -464,7 +464,41 @@ export class EvaluationsService {
     return mapFicheToDto(updated);
   }
 
+  private async ensureFichesForActiveCycle() {
+    try {
+      const cycle = await this.prisma.cycles_evaluation.findFirst({
+        where: { statut: { in: ['ACTIF', 'EN_COURS'] } },
+        orderBy: { annee: 'desc' },
+      });
+      if (!cycle) return;
+
+      const subordinates = await this.prisma.utilisateurs_cache.findMany({
+        where: { managerId: { not: null } },
+      });
+
+      for (const sub of subordinates) {
+        const existing = await this.prisma.fiches_evaluation.findFirst({
+          where: { salarieId: sub.id_microsoft, cycleId: cycle.id },
+        });
+        if (!existing) {
+          await this.prisma.fiches_evaluation.create({
+            data: {
+              id: 'fic-' + sub.id_microsoft.substring(0, 8) + '-' + Date.now().toString(36),
+              statut: sub.role === 'N1' ? 'EVALUATION_N2' : 'FIXATION_OBJECTIFS',
+              cycleId: cycle.id,
+              salarieId: sub.id_microsoft,
+              updatedAt: new Date(),
+            },
+          });
+        }
+      }
+    } catch (e) {
+      // Ignorer silencieusement si la synchronisation échoue
+    }
+  }
+
   async getAllForRh() {
+    await this.ensureFichesForActiveCycle();
     const fiches = await this.prisma.fiches_evaluation.findMany({
       include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
@@ -474,6 +508,7 @@ export class EvaluationsService {
   }
 
   async getN2TeamEvaluations(n2Id?: string) {
+    await this.ensureFichesForActiveCycle();
     // Supervision N+2 : renvoie toutes les fiches du périmètre N+2
     const fiches = await this.prisma.fiches_evaluation.findMany({
       include: FICHE_INCLUDE,
