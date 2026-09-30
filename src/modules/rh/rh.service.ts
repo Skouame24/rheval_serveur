@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapFicheToDto } from '../../common/fiche.mapper';
 import * as ExcelJS from 'exceljs';
@@ -7,6 +7,99 @@ import type { Response } from 'express';
 @Injectable()
 export class RhService {
   constructor(private prisma: PrismaService) {}
+
+  // ── Gestion des Cycles ──────────────────────────────────────
+
+  async getCycles() {
+    const cycles = await this.prisma.cycles_evaluation.findMany({
+      orderBy: { annee: 'desc' },
+    });
+    return cycles.map((c) => ({
+      id: c.id,
+      annee: c.annee,
+      libelle: c.libelle,
+      statut: c.statut,
+      dateDebut: c.dateOuverture?.toISOString() || null,
+      dateFin: c.dateFermeture?.toISOString() || null,
+    }));
+  }
+
+  async getCycleActif() {
+    const cycle = await this.prisma.cycles_evaluation.findFirst({
+      where: { statut: 'ACTIF' },
+      orderBy: { annee: 'desc' },
+    });
+    if (!cycle) return null;
+    return {
+      id: cycle.id,
+      annee: cycle.annee,
+      libelle: cycle.libelle,
+      statut: cycle.statut,
+      dateDebut: cycle.dateOuverture?.toISOString() || null,
+      dateFin: cycle.dateFermeture?.toISOString() || null,
+    };
+  }
+
+  async creerCycle(data: { annee: number; libelle: string; dateDebut: string; dateFin: string; creeParUserId?: string }) {
+    // Vérifier qu'il n'y a pas déjà un cycle ACTIF
+    const existing = await this.prisma.cycles_evaluation.findFirst({
+      where: { statut: 'ACTIF' },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        `Un cycle est déjà actif : "${existing.libelle}". Clôturez-le avant d'en créer un nouveau.`,
+      );
+    }
+
+    // Récupérer un utilisateur créateur valide
+    let creatorId = data.creeParUserId;
+    if (!creatorId) {
+      const admin = await this.prisma.utilisateurs_cache.findFirst({
+        where: { role: 'DRH' },
+      });
+      creatorId = admin?.id_microsoft;
+      if (!creatorId) {
+        const anyUser = await this.prisma.utilisateurs_cache.findFirst();
+        creatorId = anyUser?.id_microsoft;
+      }
+    }
+    if (!creatorId) {
+      throw new BadRequestException('Aucun utilisateur DRH trouvé. Connectez-vous d\'abord via SSO.');
+    }
+
+    const cycle = await this.prisma.cycles_evaluation.create({
+      data: {
+        id: 'cyc-' + Date.now(),
+        libelle: data.libelle,
+        annee: data.annee,
+        typeCycle: 'ANNUEL',
+        statut: 'ACTIF',
+        dateOuverture: new Date(data.dateDebut),
+        dateFermeture: new Date(data.dateFin),
+        creeParUserId: creatorId,
+        updatedAt: new Date(),
+      },
+    });
+
+    return {
+      id: cycle.id,
+      annee: cycle.annee,
+      libelle: cycle.libelle,
+      statut: cycle.statut,
+      dateDebut: cycle.dateOuverture?.toISOString() || null,
+      dateFin: cycle.dateFermeture?.toISOString() || null,
+    };
+  }
+
+  async cloturerCycle(id: string) {
+    const cycle = await this.prisma.cycles_evaluation.findUnique({ where: { id } });
+    if (!cycle) throw new NotFoundException('Cycle introuvable');
+    const updated = await this.prisma.cycles_evaluation.update({
+      where: { id },
+      data: { statut: 'CLOTURE' },
+    });
+    return { success: true, message: `Cycle "${updated.libelle}" clôturé.` };
+  }
 
   async getDashboardStats() {
     const totalSalaries = await this.prisma.utilisateurs_cache.count();

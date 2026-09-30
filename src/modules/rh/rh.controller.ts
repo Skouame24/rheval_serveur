@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, Headers, Res } from '@nestjs/common';
 import { RhService } from './rh.service';
 import type { Response } from 'express';
 
@@ -10,6 +10,33 @@ export class RhController {
   async getDashboardStats() {
     return this.rhService.getDashboardStats();
   }
+
+  // ── Cycles ──────────────────────────────────────────────────
+
+  @Get('cycles')
+  async getCycles() {
+    return this.rhService.getCycles();
+  }
+
+  @Get('cycles/actif')
+  async getCycleActif() {
+    return this.rhService.getCycleActif();
+  }
+
+  @Post('cycles')
+  async creerCycle(
+    @Body() body: { annee: number; libelle: string; dateDebut: string; dateFin: string },
+    @Headers('x-user-id') userId?: string,
+  ) {
+    return this.rhService.creerCycle({ ...body, creeParUserId: userId });
+  }
+
+  @Put('cycles/:id/cloturer')
+  async cloturerCycle(@Param('id') id: string) {
+    return this.rhService.cloturerCycle(id);
+  }
+
+  // ── Arbitrages ──────────────────────────────────────────────
 
   @Get('arbitrages')
   async getArbitrages() {
