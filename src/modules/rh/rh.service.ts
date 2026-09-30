@@ -40,7 +40,13 @@ export class RhService {
     };
   }
 
-  async creerCycle(data: { annee: number; libelle: string; dateDebut: string; dateFin: string; creeParUserId?: string }) {
+  async creerCycle(data: {
+    annee: number;
+    libelle: string;
+    dateDebut: string;
+    dateFin: string;
+    creeParUserId?: string;
+  }) {
     // Vérifier qu'il n'y a pas déjà un cycle ACTIF
     const existing = await this.prisma.cycles_evaluation.findFirst({
       where: { statut: 'ACTIF' },
@@ -51,20 +57,38 @@ export class RhService {
       );
     }
 
-    // Récupérer un utilisateur créateur valide
+    // Résoudre l'utilisateur créateur
     let creatorId = data.creeParUserId;
-    if (!creatorId) {
-      const admin = await this.prisma.utilisateurs_cache.findFirst({
-        where: { role: 'DRH' },
+
+    // Vérifier que le userId fourni existe vraiment en DB
+    if (creatorId) {
+      const userExists = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: creatorId },
       });
-      creatorId = admin?.id_microsoft;
-      if (!creatorId) {
-        const anyUser = await this.prisma.utilisateurs_cache.findFirst();
-        creatorId = anyUser?.id_microsoft;
+      if (!userExists) {
+        // Le user SSO n'est pas encore caché → chercher un DRH en DB
+        creatorId = undefined;
       }
     }
+
+    // Fallback : prendre un DRH existant
     if (!creatorId) {
-      throw new BadRequestException('Aucun utilisateur DRH trouvé. Connectez-vous d\'abord via SSO.');
+      const drh = await this.prisma.utilisateurs_cache.findFirst({
+        where: { role: 'DRH' },
+      });
+      creatorId = drh?.id_microsoft;
+    }
+
+    // Dernier fallback : n'importe quel utilisateur
+    if (!creatorId) {
+      const anyUser = await this.prisma.utilisateurs_cache.findFirst();
+      creatorId = anyUser?.id_microsoft;
+    }
+
+    if (!creatorId) {
+      throw new BadRequestException(
+        'Aucun utilisateur trouvé en base. Veuillez vous connecter via SSO avant de créer un cycle.',
+      );
     }
 
     const cycle = await this.prisma.cycles_evaluation.create({
@@ -96,10 +120,12 @@ export class RhService {
     if (!cycle) throw new NotFoundException('Cycle introuvable');
     const updated = await this.prisma.cycles_evaluation.update({
       where: { id },
-      data: { statut: 'CLOTURE' },
+      data: { statut: 'CLOTURE', updatedAt: new Date() },
     });
     return { success: true, message: `Cycle "${updated.libelle}" clôturé.` };
   }
+
+  // ── Dashboard Stats ─────────────────────────────────────────
 
   async getDashboardStats() {
     const totalSalaries = await this.prisma.utilisateurs_cache.count();
@@ -143,6 +169,8 @@ export class RhService {
       repartitionStatuts,
     };
   }
+
+  // ── Arbitrages ──────────────────────────────────────────────
 
   async getArbitrages() {
     const fiches = await this.prisma.fiches_evaluation.findMany({
@@ -194,6 +222,8 @@ export class RhService {
       message: "Arbitrage résolu et note finale enregistrée avec succès",
     };
   }
+
+  // ── Bonus ───────────────────────────────────────────────────
 
   async getBonusResultats(cycleId?: string) {
     const fiches = await this.prisma.fiches_evaluation.findMany({
@@ -280,6 +310,8 @@ export class RhService {
       updatedAt: new Date().toISOString(),
     };
   }
+
+  // ── Export Excel ────────────────────────────────────────────
 
   async exportExcel(cycleId: string, res: Response) {
     const workbook = new ExcelJS.Workbook();
