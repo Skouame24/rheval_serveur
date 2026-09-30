@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Body, Param, Query, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  Query,
+  Headers,
+  Res,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { RhService } from './rh.service';
 import type { Response } from 'express';
 
@@ -10,6 +22,51 @@ export class RhController {
   async getDashboardStats() {
     return this.rhService.getDashboardStats();
   }
+
+  // ── Cycles ──────────────────────────────────────────────────
+
+  @Get('cycles')
+  async getCycles() {
+    return this.rhService.getCycles();
+  }
+
+  @Get('cycles/actif')
+  async getCycleActif() {
+    return this.rhService.getCycleActif();
+  }
+
+  @Post('cycles')
+  async creerCycle(
+    @Body() body: { annee: number; libelle: string; dateDebut: string; dateFin: string },
+    @Headers('x-user-id') userId?: string,
+  ) {
+    try {
+      return await this.rhService.creerCycle({ ...body, creeParUserId: userId });
+    } catch (err: any) {
+      // Relancer les exceptions NestJS telles quelles (BadRequestException, etc.)
+      if (err?.status) throw err;
+      // Convertir les erreurs inconnues en 500 lisible
+      throw new HttpException(
+        { statusCode: 500, message: err?.message || 'Erreur serveur lors de la création du cycle.', error: 'Internal Server Error' },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Put('cycles/:id/cloturer')
+  async cloturerCycle(@Param('id') id: string) {
+    try {
+      return await this.rhService.cloturerCycle(id);
+    } catch (err: any) {
+      if (err?.status) throw err;
+      throw new HttpException(
+        { statusCode: 500, message: err?.message || 'Erreur lors de la clôture du cycle.', error: 'Internal Server Error' },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // ── Arbitrages ──────────────────────────────────────────────
 
   @Get('arbitrages')
   async getArbitrages() {
