@@ -36,10 +36,10 @@ model cycles_evaluation {
   dateOuverture      DateTime
   dateFermeture      DateTime
   statut             String
-  creeParUserId      String
+  creeParUserId      String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime
-  utilisateurs_cache utilisateurs_cache  @relation(fields: [creeParUserId], references: [id_microsoft])
+  utilisateurs_cache utilisateurs_cache? @relation(fields: [creeParUserId], references: [id_microsoft])
   fiches_evaluation  fiches_evaluation[]
 }
 

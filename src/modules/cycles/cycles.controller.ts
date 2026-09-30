@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Body, Param, Headers } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  Headers,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { CyclesService } from './cycles.service';
 
 @Controller('rh/cycles')
@@ -17,10 +27,22 @@ export class CyclesController {
 
   @Post()
   async create(@Body() body: any, @Headers('x-user-id') userId?: string) {
-    return this.cyclesService.create({
-      ...body,
-      creeParUserId: userId || body.creeParUserId,
-    });
+    try {
+      return await this.cyclesService.create({
+        ...body,
+        creeParUserId: userId || body.creeParUserId,
+      });
+    } catch (err: any) {
+      if (err?.status) throw err;
+      throw new HttpException(
+        {
+          statusCode: 500,
+          message: err?.message || 'Erreur lors de la création du cycle.',
+          error: 'Internal Server Error',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Put(':id/cloturer')

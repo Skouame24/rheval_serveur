@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -23,7 +23,6 @@ export class CyclesService {
     });
 
     if (!cycle) {
-      // Si aucun cycle actif explicite, renvoyer le plus récent
       return this.prisma.cycles_evaluation.findFirst({
         orderBy: { annee: 'desc' },
         include: {
@@ -42,11 +41,37 @@ export class CyclesService {
     dateFin: string;
     creeParUserId?: string;
   }) {
-    // Obtenir un ID utilisateur existant si non fourni
-    let creatorId = data.creeParUserId;
+    // Vérifier si un cycle actif existe déjà
+    const existingActive = await this.prisma.cycles_evaluation.findFirst({
+      where: { statut: { in: ['ACTIF', 'EN_COURS'] } },
+    });
+    if (existingActive) {
+      throw new BadRequestException(
+        `Un cycle d'évaluation est déjà actif : "${existingActive.libelle}" (${existingActive.annee}). Veuillez le clôturer avant d'en ouvrir un nouveau.`,
+      );
+    }
+
+    // Résoudre l'utilisateur créateur en vérifiant son existence réelle en DB
+    let creatorId: string | null = null;
+    if (data.creeParUserId) {
+      const userExists = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: data.creeParUserId },
+      });
+      if (userExists) {
+        creatorId = userExists.id_microsoft;
+      }
+    }
+
     if (!creatorId) {
-      const admin = await this.prisma.utilisateurs_cache.findFirst();
-      creatorId = admin?.id_microsoft || 'usr-default';
+      const admin = await this.prisma.utilisateurs_cache.findFirst({
+        where: { role: { in: ['DRH', 'RH', 'ADMIN'] } },
+      });
+      creatorId = admin?.id_microsoft || null;
+    }
+
+    if (!creatorId) {
+      const anyUser = await this.prisma.utilisateurs_cache.findFirst();
+      creatorId = anyUser?.id_microsoft || null;
     }
 
     const cycleId = 'cyc-' + Date.now();
