@@ -43,10 +43,17 @@ export function mapFicheToDto(f: any): any {
     ? Number(sumPondereeAuto.toFixed(2))
     : undefined;
 
-  // Si le salarié a auto-évalué et le statut est encore FIXATION_OBJECTIFS, on avance dynamiquement à EN_ATTENTE_N1
+  // Résolution dynamique et fluide du statut :
   let resolvedStatut = f.statut;
-  if (resolvedStatut === 'FIXATION_OBJECTIFS' && hasAutoEvaluations) {
-    resolvedStatut = 'EN_ATTENTE_N1';
+
+  // 1. Si des objectifs sont déjà enregistrés mais que la fiche est encore marquée FIXATION_OBJECTIFS -> AUTO_EVALUATION
+  if (resolvedStatut === 'FIXATION_OBJECTIFS' && (f.objectifs || []).length > 0) {
+    resolvedStatut = 'AUTO_EVALUATION';
+  }
+
+  // 2. Si le salarié a saisi son auto-évaluation -> EVALUATION_N1
+  if ((resolvedStatut === 'FIXATION_OBJECTIFS' || resolvedStatut === 'AUTO_EVALUATION') && hasAutoEvaluations) {
+    resolvedStatut = 'EVALUATION_N1';
   }
 
   return {
