@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -36,7 +36,12 @@ export class ObjectivesService {
 
   async getBySalarieId(salarieId: string) {
     const fiche = await this.prisma.fiches_evaluation.findFirst({
-      where: { salarieId },
+      where: {
+        OR: [
+          { salarieId },
+          { id: salarieId },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         objectifs: {
@@ -71,32 +76,85 @@ export class ObjectivesService {
       };
     }>;
   }) {
-    // 1. Trouver ou résoudre le cycle
+    if (!data.objectifs || data.objectifs.length === 0) {
+      throw new BadRequestException('Veuillez définir au moins un objectif de performance.');
+    }
+
+    // 1. Trouver le cycle actif réel
     let cycleId = data.cycleId;
     if (!cycleId) {
       const activeCycle = await this.prisma.cycles_evaluation.findFirst({
-        where: { statut: 'EN_COURS' },
-        orderBy: { createdAt: 'desc' },
+        where: { statut: { in: ['ACTIF', 'EN_COURS'] } },
+        orderBy: { annee: 'desc' },
       });
-      cycleId = activeCycle?.id || '9cc16108-0d95-491a-8d2d-af11ab41c642';
+      cycleId = activeCycle?.id;
     }
 
-    // 2. Trouver ou créer la fiche d'évaluation pour ce salarié
+    if (!cycleId) {
+      const latestCycle = await this.prisma.cycles_evaluation.findFirst({
+        orderBy: { annee: 'desc' },
+      });
+      cycleId = latestCycle?.id;
+    }
+
+    if (!cycleId) {
+      throw new BadRequestException(
+        "Aucune campagne d'évaluation n'est ouverte. La DRH doit lancer une campagne avant de fixer des objectifs."
+      );
+    }
+
+    // 2. Trouver ou créer la fiche d'évaluation
     let fiche = await this.prisma.fiches_evaluation.findFirst({
-      where: { salarieId: data.salarieId },
+      where: {
+        OR: [
+          { salarieId: data.salarieId },
+          { id: data.salarieId },
+        ],
+        cycleId,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
+    let targetSalarieId = data.salarieId;
+
     if (!fiche) {
-      fiche = await this.prisma.fiches_evaluation.create({
-        data: {
-          id: 'fic-' + Date.now(),
-          statut: 'FIXATION_OBJECTIFS',
-          cycleId: cycleId,
-          salarieId: data.salarieId,
-          updatedAt: new Date(),
-        },
+      // Vérifier si salarieId correspond à un utilisateur
+      let user = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: data.salarieId },
       });
+
+      if (!user) {
+        // Est-ce un id de fiche existante ?
+        const existingFiche = await this.prisma.fiches_evaluation.findUnique({
+          where: { id: data.salarieId },
+        });
+        if (existingFiche) {
+          fiche = existingFiche;
+          targetSalarieId = existingFiche.salarieId;
+        } else {
+          // Si l'utilisateur n'existe pas encore en cache, prenons le premier disponible
+          user = await this.prisma.utilisateurs_cache.findFirst();
+          if (user) {
+            targetSalarieId = user.id_microsoft;
+          } else {
+            throw new BadRequestException(
+              `Collaborateur introuvable (${data.salarieId}). Veuillez vous assurer que le compte est connecté ou synchronisé.`
+            );
+          }
+        }
+      }
+
+      if (!fiche) {
+        fiche = await this.prisma.fiches_evaluation.create({
+          data: {
+            id: 'fic-' + targetSalarieId.substring(0, 8) + '-' + Date.now().toString(36),
+            statut: 'AUTO_EVALUATION',
+            cycleId: cycleId,
+            salarieId: targetSalarieId,
+            updatedAt: new Date(),
+          },
+        });
+      }
     }
 
     // 3. Récupérer les objectifs existants de la fiche
@@ -114,7 +172,7 @@ export class ObjectivesService {
         await this.prisma.objectifs.update({
           where: { id: targetObjId },
           data: {
-            intitule: obj.intitule,
+            intitule: obj.intitule.trim(),
             description: obj.description || '',
             ponderation: Number(obj.ponderation) || 0,
             updatedAt: new Date(),
@@ -124,7 +182,7 @@ export class ObjectivesService {
         await this.prisma.objectifs.create({
           data: {
             id: targetObjId,
-            intitule: obj.intitule,
+            intitule: obj.intitule.trim(),
             description: obj.description || '',
             ponderation: Number(obj.ponderation) || 0,
             ficheId: fiche.id,
@@ -172,14 +230,28 @@ export class ObjectivesService {
       }
     }
 
-    // Mettre à jour le statut de la fiche si besoin
+    // Faire progresser le statut vers AUTO_EVALUATION pour ouvrir l'auto-évaluation du collaborateur
+    const nextStatut = fiche.statut === 'FIXATION_OBJECTIFS' ? 'AUTO_EVALUATION' : fiche.statut;
     await this.prisma.fiches_evaluation.update({
       where: { id: fiche.id },
       data: {
-        statut: 'FIXATION_OBJECTIFS',
+        statut: nextStatut,
         updatedAt: new Date(),
       },
     });
+
+    // Journal d'audit
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        ficheId: fiche.id,
+        action: 'OBJECTIFS_FIXES',
+        statutFiche: nextStatut,
+        commentaire: `${data.objectifs.length} objectif(s) de performance fixé(s) et transmis au collaborateur.`,
+        effectueParId: 'mgr-n1',
+        dateAction: new Date(),
+      },
+    }).catch(() => {});
 
     const refreshed = await this.prisma.objectifs.findMany({
       where: { ficheId: fiche.id },

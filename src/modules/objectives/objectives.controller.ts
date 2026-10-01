@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Body, Param, Headers } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  Headers,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { ObjectivesService } from './objectives.service';
 
 @Controller()
@@ -17,7 +27,19 @@ export class ObjectivesController {
 
   @Post('n1/objectifs')
   async create(@Body() body: any) {
-    return this.objectivesService.create(body);
+    try {
+      return await this.objectivesService.create(body);
+    } catch (err: any) {
+      if (err?.status) throw err;
+      throw new HttpException(
+        {
+          statusCode: 500,
+          message: err?.message || "Erreur lors de l'enregistrement des objectifs.",
+          error: 'Internal Server Error',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Put('n1/objectifs/:id')
