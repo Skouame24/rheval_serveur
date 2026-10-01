@@ -192,10 +192,28 @@ export class EvaluationsService {
       }
     }
 
+    // Déterminer le statut suivant : si le salarié est un manager N1 direct (ou supervisé par N2), il passe directement à EVALUATION_N2
+    let isEvaluatedByN2Directly = false;
+    const userCache = await this.prisma.utilisateurs_cache.findUnique({
+      where: { id_microsoft: existing.salarieId },
+    });
+    if (userCache?.role === 'N1' || userCache?.role === 'MANAGER') {
+      isEvaluatedByN2Directly = true;
+    } else if (userCache?.managerId) {
+      const mgr = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: userCache.managerId },
+      });
+      if (mgr?.role === 'N2' || mgr?.role === 'DRH') {
+        isEvaluatedByN2Directly = true;
+      }
+    }
+
+    const nextStatut = isEvaluatedByN2Directly ? 'EVALUATION_N2' : 'EVALUATION_N1';
+
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id },
       data: {
-        statut: 'EVALUATION_N1',
+        statut: nextStatut,
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
       },

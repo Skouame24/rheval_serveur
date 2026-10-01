@@ -51,9 +51,10 @@ export function mapFicheToDto(f: any): any {
     resolvedStatut = 'AUTO_EVALUATION';
   }
 
-  // 2. Si le salarié a saisi son auto-évaluation -> EVALUATION_N1
+  // 2. Si le salarié a saisi son auto-évaluation -> EVALUATION_N2 si N1 direct, sinon EVALUATION_N1
   if ((resolvedStatut === 'FIXATION_OBJECTIFS' || resolvedStatut === 'AUTO_EVALUATION') && hasAutoEvaluations) {
-    resolvedStatut = 'EVALUATION_N1';
+    const isDirectN2 = f.utilisateurs_cache?.role === 'N1' || f.utilisateurs_cache?.managerId === 'drh-id-1234';
+    resolvedStatut = isDirectN2 ? 'EVALUATION_N2' : 'EVALUATION_N1';
   }
 
   return {
