@@ -23,13 +23,19 @@ export class EmployeesService {
     }
 
     let n1User = null;
+    let n2User = null;
     if (user.managerId) {
       n1User = await this.prisma.utilisateurs_cache.findUnique({
         where: { id_microsoft: user.managerId },
       });
+      if (n1User?.managerId) {
+        n2User = await this.prisma.utilisateurs_cache.findUnique({
+          where: { id_microsoft: n1User.managerId },
+        });
+      }
     }
 
-    return mapUserToDto(user, n1User);
+    return mapUserToDto(user, n1User, n2User);
   }
 
   async getById(id: string) {
@@ -42,13 +48,19 @@ export class EmployeesService {
     }
 
     let n1User = null;
+    let n2User = null;
     if (user.managerId) {
       n1User = await this.prisma.utilisateurs_cache.findUnique({
         where: { id_microsoft: user.managerId },
       });
+      if (n1User?.managerId) {
+        n2User = await this.prisma.utilisateurs_cache.findUnique({
+          where: { id_microsoft: n1User.managerId },
+        });
+      }
     }
 
-    return mapUserToDto(user, n1User);
+    return mapUserToDto(user, n1User, n2User);
   }
 
   async getMyTeam(managerId?: string) {
