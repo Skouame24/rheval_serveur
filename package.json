@@ -14,6 +14,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:pull": "prisma db pull",
+    "prisma:reset": "prisma db push --force-reset",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
