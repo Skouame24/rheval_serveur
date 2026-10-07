@@ -22,16 +22,7 @@ export class CyclesService {
       },
     });
 
-    if (!cycle) {
-      return this.prisma.cycles_evaluation.findFirst({
-        orderBy: { annee: 'desc' },
-        include: {
-          fiches_evaluation: true,
-        },
-      });
-    }
-
-    return cycle;
+    return cycle || null;
   }
 
   async create(data: {

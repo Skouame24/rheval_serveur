@@ -90,18 +90,21 @@ export class ObjectivesService {
         orderBy: { annee: 'desc' },
       });
       cycleId = activeCycle?.id;
-    }
-
-    if (!cycleId) {
-      const latestCycle = await this.prisma.cycles_evaluation.findFirst({
-        orderBy: { annee: 'desc' },
+    } else {
+      // Si un cycleId est fourni, vérifier qu'il est bien actif
+      const specificCycle = await this.prisma.cycles_evaluation.findUnique({
+        where: { id: cycleId },
       });
-      cycleId = latestCycle?.id;
+      if (!specificCycle || !['ACTIF', 'EN_COURS'].includes(specificCycle.statut)) {
+        throw new BadRequestException(
+          "La campagne d'évaluation spécifiée n'est pas active ou a été clôturée."
+        );
+      }
     }
 
     if (!cycleId) {
       throw new BadRequestException(
-        "Aucune campagne d'évaluation n'est ouverte. La DRH doit lancer une campagne avant de fixer des objectifs."
+        "Aucune campagne d'évaluation n'est actuellement ouverte. Les RH doivent créer et lancer une campagne avant de pouvoir fixer des objectifs."
       );
     }
 
