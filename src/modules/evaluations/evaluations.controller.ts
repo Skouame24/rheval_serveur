@@ -6,17 +6,21 @@ export class EvaluationsController {
   constructor(private readonly evaluationsService: EvaluationsService) {}
 
   @Get('evaluations/me/current')
-  async getMyCurrent(@Headers('x-user-id') userId?: string) {
-    return this.evaluationsService.getMyCurrent(userId);
+  async getMyCurrent(
+    @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.evaluationsService.getMyCurrent(userId, userEmail);
   }
 
   @Get('evaluations/me/history')
   async getMyHistory(
     @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
     @Query('annee') annee?: number,
     @Query('statut') statut?: string,
   ) {
-    return this.evaluationsService.getMyHistory(userId, annee, statut);
+    return this.evaluationsService.getMyHistory(userId, annee, statut, userEmail);
   }
 
   @Get('evaluations/:id')

@@ -16,8 +16,11 @@ export class ObjectivesController {
   constructor(private readonly objectivesService: ObjectivesService) {}
 
   @Get('objectifs/me')
-  async getMyObjectifs(@Headers('x-user-id') userId?: string) {
-    return this.objectivesService.getMyObjectifs(userId);
+  async getMyObjectifs(
+    @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.objectivesService.getMyObjectifs(userId, userEmail);
   }
 
   @Get('n1/objectifs/:salarieId')

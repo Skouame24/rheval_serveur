@@ -6,8 +6,11 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get('employees/me')
-  async getMe(@Headers('x-user-id') userId?: string) {
-    return this.employeesService.getMe(userId);
+  async getMe(
+    @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.employeesService.getMe(userId, userEmail);
   }
 
   @Get('employees/n2-subordinates')

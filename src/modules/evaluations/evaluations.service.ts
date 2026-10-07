@@ -23,11 +23,13 @@ const FICHE_INCLUDE = {
 export class EvaluationsService {
   constructor(private prisma: PrismaService) {}
 
-  async getMyCurrent(userId?: string) {
+  async getMyCurrent(userId?: string, userEmail?: string) {
     let uId = userId;
-    if (!uId) {
-      const firstUser = await this.prisma.utilisateurs_cache.findFirst();
-      uId = firstUser?.id_microsoft;
+    if (!uId && userEmail) {
+      const user = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+      uId = user?.id_microsoft;
     }
 
     if (!uId) return null;
@@ -60,11 +62,13 @@ export class EvaluationsService {
     return mapFicheToDto(fiche);
   }
 
-  async getMyHistory(userId?: string, annee?: number, statut?: string) {
+  async getMyHistory(userId?: string, annee?: number, statut?: string, userEmail?: string) {
     let uId = userId;
-    if (!uId) {
-      const firstUser = await this.prisma.utilisateurs_cache.findFirst();
-      uId = firstUser?.id_microsoft;
+    if (!uId && userEmail) {
+      const user = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+      uId = user?.id_microsoft;
     }
 
     if (!uId) return [];

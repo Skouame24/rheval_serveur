@@ -6,7 +6,7 @@ import { mapUserToDto } from '../../common/user.mapper';
 export class EmployeesService {
   constructor(private prisma: PrismaService) {}
 
-  async getMe(userId?: string) {
+  async getMe(userId?: string, userEmail?: string) {
     let user = null;
     if (userId) {
       user = await this.prisma.utilisateurs_cache.findUnique({
@@ -14,12 +14,14 @@ export class EmployeesService {
       });
     }
 
-    if (!user) {
-      user = await this.prisma.utilisateurs_cache.findFirst();
+    if (!user && userEmail) {
+      user = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
     }
 
     if (!user) {
-      throw new NotFoundException('Utilisateur introuvable');
+      throw new NotFoundException('Utilisateur non synchronisé en base de données');
     }
 
     let n1User = null;
@@ -64,36 +66,35 @@ export class EmployeesService {
   }
 
   async getMyTeam(managerId?: string) {
-    let mgrId = managerId;
-    if (!mgrId) {
-      const mgr = await this.prisma.utilisateurs_cache.findFirst({
-        where: { role: { in: ['N1', 'N2', 'DRH'] } },
-      });
-      mgrId = mgr?.id_microsoft;
-    }
+    if (!managerId) return [];
 
-    // Récupérer les collaborateurs directs dont managerId correspond
-    let team = [];
-    if (mgrId) {
-      team = await this.prisma.utilisateurs_cache.findMany({
-        where: { managerId: mgrId },
-      });
-    }
-
-    // Si aucun collaborateur rattaché spécifiquement, on renvoie les autres utilisateurs
-    if (team.length === 0) {
-      team = await this.prisma.utilisateurs_cache.findMany({
-        where: { id_microsoft: { not: mgrId } },
-      });
-    }
+    const team = await this.prisma.utilisateurs_cache.findMany({
+      where: { managerId },
+    });
 
     return team.map((u) => mapUserToDto(u));
   }
 
   async getN2Subordinates(n2Id?: string) {
-    // Tous les utilisateurs N-1 et N-2
-    const all = await this.prisma.utilisateurs_cache.findMany();
-    return all.map((u) => mapUserToDto(u));
+    if (!n2Id) return [];
+
+    // N-1 directs sous ce N-2
+    const n1Team = await this.prisma.utilisateurs_cache.findMany({
+      where: { managerId: n2Id },
+    });
+    const n1Ids = n1Team.map((u) => u.id_microsoft);
+
+    // Tous les collaborateurs directs et sous les N-1
+    const allSubordinates = await this.prisma.utilisateurs_cache.findMany({
+      where: {
+        OR: [
+          { managerId: n2Id },
+          { managerId: { in: n1Ids } },
+        ],
+      },
+    });
+
+    return allSubordinates.map((u) => mapUserToDto(u));
   }
 
   async getAllUsers() {

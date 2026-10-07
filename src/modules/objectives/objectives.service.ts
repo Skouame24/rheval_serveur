@@ -5,11 +5,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class ObjectivesService {
   constructor(private prisma: PrismaService) {}
 
-  async getMyObjectifs(userId?: string) {
+  async getMyObjectifs(userId?: string, userEmail?: string) {
     let uId = userId;
-    if (!uId) {
-      const firstUser = await this.prisma.utilisateurs_cache.findFirst();
-      uId = firstUser?.id_microsoft;
+    if (!uId && userEmail) {
+      const user = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+      uId = user?.id_microsoft;
     }
 
     if (!uId) return [];
@@ -132,15 +134,9 @@ export class ObjectivesService {
           fiche = existingFiche;
           targetSalarieId = existingFiche.salarieId;
         } else {
-          // Si l'utilisateur n'existe pas encore en cache, prenons le premier disponible
-          user = await this.prisma.utilisateurs_cache.findFirst();
-          if (user) {
-            targetSalarieId = user.id_microsoft;
-          } else {
-            throw new BadRequestException(
-              `Collaborateur introuvable (${data.salarieId}). Veuillez vous assurer que le compte est connecté ou synchronisé.`
-            );
-          }
+          throw new BadRequestException(
+            `Collaborateur introuvable (${data.salarieId}). Veuillez vous assurer que le compte est connecté ou synchronisé.`
+          );
         }
       }
 
