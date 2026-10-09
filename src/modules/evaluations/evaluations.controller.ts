@@ -80,13 +80,31 @@ export class EvaluationsController {
     return this.evaluationsService.submitVisaSalarie(id, body, userId);
   }
 
-  @Put('n2/evaluations/:id')
-  async submitNotesN2(
+  @Put('n1/evaluations/:id/objectifs')
+  async submitObjectifsN1(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Headers('x-user-id') managerId?: string,
+  ) {
+    return this.evaluationsService.submitObjectifsN1(id, body, managerId);
+  }
+
+  @Put('n2/evaluations/:id/objectifs')
+  async validateObjectifsN2(
     @Param('id') id: string,
     @Body() body: any,
     @Headers('x-user-id') n2Id?: string,
   ) {
-    return this.evaluationsService.submitNotesN2(id, body, n2Id);
+    return this.evaluationsService.validateObjectifsN2(id, body, n2Id);
+  }
+
+  @Put('n2/evaluations/:id')
+  async validateNotesN2(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Headers('x-user-id') n2Id?: string,
+  ) {
+    return this.evaluationsService.validateNotesN2(id, body, n2Id);
   }
 
   @Get('n2/evaluations')

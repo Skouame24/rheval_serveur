@@ -128,7 +128,7 @@ export class EvaluationsService {
       throw new NotFoundException(`Fiche d'évaluation ${id} introuvable`);
     }
 
-    const nextStatut = dto.accord === false ? 'ARBITRAGE' : 'VALIDATION_N2';
+    const nextStatut = dto.accord === false ? 'ARBITRAGE_RH' : 'CLOTUREE';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id },
@@ -148,6 +148,99 @@ export class EvaluationsService {
         commentaire: dto.observation || (dto.accord ? 'Visa Salarié accordé sans réserve' : 'Visa Salarié avec désaccord / réserves'),
         effectueParId: userId || existing.salarieId,
         ficheId: id,
+        dateAction: new Date(),
+      },
+    });
+
+    return mapFicheToDto(updated);
+  }
+
+  private async getNextStatusForN2(salarieId: string, nextIfN2: string, nextIfNoN2: string) {
+    const salarie = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarieId } });
+    if (!salarie?.managerId) return nextIfNoN2;
+    const n1 = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarie.managerId } });
+    if (!n1?.managerId) return nextIfNoN2;
+    return nextIfN2;
+  }
+
+  async submitObjectifsN1(
+    id: string,
+    dto: { objectifs: Array<{ intitule: string; description?: string; ponderation?: number }> },
+    managerId?: string
+  ) {
+    let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
+    if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
+    }
+    if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
+
+    const ficheId = existing.id;
+
+    if (dto.objectifs && dto.objectifs.length > 0) {
+      await this.prisma.objectifs.deleteMany({ where: { ficheId } });
+      await this.prisma.objectifs.createMany({
+        data: dto.objectifs.map((o) => ({
+          id: 'obj-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+          ficheId,
+          intitule: o.intitule,
+          description: o.description || '',
+          ponderation: o.ponderation || 0,
+          updatedAt: new Date(),
+        })),
+      });
+    }
+
+    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'OBJECTIFS_VALIDES');
+
+    const updated = await this.prisma.fiches_evaluation.update({
+      where: { id: ficheId },
+      data: { statut: nextStatut, updatedAt: new Date() },
+      include: FICHE_INCLUDE,
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: nextStatut,
+        action: 'FIXATION_OBJECTIFS_SOUMISE',
+        commentaire: 'Objectifs fixés par le N+1 et soumis pour validation',
+        effectueParId: managerId || 'mgr-n1',
+        ficheId: ficheId,
+        dateAction: new Date(),
+      },
+    });
+
+    return mapFicheToDto(updated);
+  }
+
+  async validateObjectifsN2(
+    id: string,
+    dto: { decision: 'APPROUVE' | 'REJETE'; observations?: string },
+    n2Id?: string
+  ) {
+    const existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
+
+    const nextStatut = dto.decision === 'APPROUVE' ? 'OBJECTIFS_VALIDES' : 'FIXATION_OBJECTIFS';
+
+    const updated = await this.prisma.fiches_evaluation.update({
+      where: { id: existing.id },
+      data: {
+        statut: nextStatut,
+        observation: dto.observations || existing.observation,
+        updatedAt: new Date(),
+      },
+      include: FICHE_INCLUDE,
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: nextStatut,
+        action: dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_N2_APPROUVE' : 'VALIDATION_OBJECTIFS_N2_REJETE',
+        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs approuvés par le N+2' : 'Objectifs rejetés par le N+2, retour au N+1'),
+        effectueParId: n2Id || 'mgr-n2',
+        ficheId: existing.id,
         dateAction: new Date(),
       },
     });
@@ -196,23 +289,7 @@ export class EvaluationsService {
       }
     }
 
-    // Déterminer le statut suivant : si le salarié est un manager N1 direct (ou supervisé par N2), il passe directement à EVALUATION_N2
-    let isEvaluatedByN2Directly = false;
-    const userCache = await this.prisma.utilisateurs_cache.findUnique({
-      where: { id_microsoft: existing.salarieId },
-    });
-    if (userCache?.role === 'N1' || userCache?.role === 'MANAGER') {
-      isEvaluatedByN2Directly = true;
-    } else if (userCache?.managerId) {
-      const mgr = await this.prisma.utilisateurs_cache.findUnique({
-        where: { id_microsoft: userCache.managerId },
-      });
-      if (mgr?.role === 'N2' || mgr?.role === 'DRH') {
-        isEvaluatedByN2Directly = true;
-      }
-    }
-
-    const nextStatut = isEvaluatedByN2Directly ? 'EVALUATION_N2' : 'EVALUATION_N1';
+    const nextStatut = 'EVALUATION_N1';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id },
@@ -334,10 +411,12 @@ export class EvaluationsService {
       }
     }
 
+    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_NOTES_N2', 'ACCORD_SALARIE');
+
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: ficheId },
       data: {
-        statut: 'EVALUATION_N2',
+        statut: nextStatut,
         noteGlobale: noteGlobale,
         observation: dto.observations || existing.observation,
         updatedAt: new Date(),
@@ -348,9 +427,9 @@ export class EvaluationsService {
     await this.prisma.historique_evaluation.create({
       data: {
         id: 'hist-' + Date.now(),
-        statutFiche: 'EVALUATION_N2',
+        statutFiche: nextStatut,
         action: 'EVALUATION_N1_SOUMISE',
-        commentaire: dto.observations || 'Évaluation N+1 validée et transmise à la Direction N+2 pour revue',
+        commentaire: dto.observations || 'Évaluation N+1 validée et transmise',
         effectueParId: managerId || 'mgr-n1',
         ficheId: ficheId,
         dateAction: new Date(),
@@ -360,12 +439,11 @@ export class EvaluationsService {
     return mapFicheToDto(updated);
   }
 
-  async submitNotesN2(
+  async validateNotesN2(
     id: string,
     dto: {
-      notes?: Array<{ objectifId: string; note: number; commentaire?: string }>;
       observations?: string;
-      decision?: 'APPROUVE' | 'ARBITRAGE';
+      decision: 'APPROUVE' | 'REJETE';
     },
     n2Id?: string,
   ) {
@@ -386,32 +464,7 @@ export class EvaluationsService {
 
     const examinateurId = n2Id || 'drh-id-1234';
 
-    if (dto.notes && dto.notes.length > 0) {
-      for (const item of dto.notes) {
-        await this.prisma.evaluations.upsert({
-          where: {
-            examinateurId_objectifId: {
-              examinateurId,
-              objectifId: item.objectifId,
-            },
-          },
-          update: {
-            note: item.note,
-            observation: item.commentaire,
-            updatedAt: new Date(),
-          },
-          create: {
-            examinateurId,
-            objectifId: item.objectifId,
-            note: item.note,
-            observation: item.commentaire,
-            updatedAt: new Date(),
-          },
-        });
-      }
-    }
-
-    const nextStatut = dto.decision === 'ARBITRAGE' ? 'ARBITRAGE' : 'VALIDATION_DRH';
+    const nextStatut = dto.decision === 'REJETE' ? 'EVALUATION_N1' : 'ACCORD_SALARIE';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: existing.id },
@@ -427,8 +480,8 @@ export class EvaluationsService {
       data: {
         id: 'hist-' + Date.now(),
         statutFiche: nextStatut,
-        action: dto.decision === 'ARBITRAGE' ? 'ARBITRAGE_DEMANDE_N2' : 'CONTRE_EVALUATION_N2',
-        commentaire: dto.observations || (dto.decision === 'ARBITRAGE' ? "Arbitrage requis par le N+2 suite à un écart de notation" : 'Contre-évaluation et Visa N+2 validés'),
+        action: dto.decision === 'REJETE' ? 'VALIDATION_NOTES_N2_REJETE' : 'VALIDATION_NOTES_N2_APPROUVE',
+        commentaire: dto.observations || (dto.decision === 'REJETE' ? "Notes rejetées par le N+2" : 'Notes validées par le N+2'),
         effectueParId: examinateurId,
         ficheId: existing.id,
         dateAction: new Date(),
@@ -506,7 +559,7 @@ export class EvaluationsService {
           await this.prisma.fiches_evaluation.create({
             data: {
               id: 'fic-' + sub.id_microsoft.substring(0, 8) + '-' + Date.now().toString(36),
-              statut: sub.role === 'N1' ? 'EVALUATION_N2' : 'FIXATION_OBJECTIFS',
+              statut: 'FIXATION_OBJECTIFS',
               cycleId: cycle.id,
               salarieId: sub.id_microsoft,
               updatedAt: new Date(),

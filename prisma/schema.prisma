@@ -35,6 +35,10 @@ model cycles_evaluation {
   typeCycle          String
   dateOuverture      DateTime
   dateFermeture      DateTime
+  dateDebutFixation  DateTime?
+  dateFinFixation    DateTime?
+  dateDebutEval      DateTime?
+  dateFinEval        DateTime?
   statut             String
   creeParUserId      String?
   createdAt          DateTime            @default(now())
