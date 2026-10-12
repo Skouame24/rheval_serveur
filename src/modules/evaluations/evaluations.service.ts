@@ -628,8 +628,29 @@ export class EvaluationsService {
 
   async getN2TeamEvaluations(n2Id?: string) {
     await this.ensureFichesForActiveCycle();
-    // Supervision N+2 : renvoie toutes les fiches du périmètre N+2
+    let directorId = n2Id;
+    if (!directorId) {
+      const dir = await this.prisma.utilisateurs_cache.findFirst({
+        where: { role: 'N2' },
+      });
+      directorId = dir?.id_microsoft;
+    }
+
+    let subordinateIds: string[] = [];
+    if (directorId) {
+      subordinateIds = await getSubordinateIds(this.prisma, directorId);
+    }
+
+    const whereClause: any = {};
+    if (subordinateIds.length > 0) {
+      whereClause.salarieId = { in: subordinateIds };
+    }
+    if (directorId) {
+      whereClause.NOT = { salarieId: directorId };
+    }
+
     const fiches = await this.prisma.fiches_evaluation.findMany({
+      where: whereClause,
       include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
