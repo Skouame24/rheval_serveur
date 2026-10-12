@@ -707,31 +707,22 @@ export class EvaluationsService {
       mgrId = mgr?.id_microsoft;
     }
 
-    let teamIds: string[] = [];
+    let directSubordinateIds: string[] = [];
     if (mgrId) {
-      teamIds = await getSubordinateIds(this.prisma, mgrId);
+      const directSubs = await this.prisma.utilisateurs_cache.findMany({
+        where: { managerId: mgrId },
+        select: { id_microsoft: true },
+      });
+      directSubordinateIds = directSubs.map((s) => s.id_microsoft);
     }
 
     let fiches: any[] = [];
-    if (teamIds.length > 0) {
+    if (directSubordinateIds.length > 0) {
       fiches = await this.prisma.fiches_evaluation.findMany({
-        where: { salarieId: { in: teamIds } },
+        where: { salarieId: { in: directSubordinateIds } },
         include: FICHE_INCLUDE,
         orderBy: { createdAt: 'desc' },
       });
-    }
-
-    // Fallback : si l'utilisateur est DRH ou N2 ou si aucun subordonné direct n'est trouvé
-    if (fiches.length === 0 && mgrId) {
-      const mgrUser = await this.prisma.utilisateurs_cache.findUnique({
-        where: { id_microsoft: mgrId },
-      });
-      if (mgrUser?.role === 'DRH' || mgrUser?.role === 'RH' || mgrUser?.role === 'N2') {
-        fiches = await this.prisma.fiches_evaluation.findMany({
-          include: FICHE_INCLUDE,
-          orderBy: { createdAt: 'desc' },
-        });
-      }
     }
 
     return fiches.map(mapFicheToDto);
