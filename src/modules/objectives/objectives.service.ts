@@ -229,8 +229,18 @@ export class ObjectivesService {
       }
     }
 
-    // Faire progresser le statut vers AUTO_EVALUATION pour ouvrir l'auto-évaluation du collaborateur
-    const nextStatut = fiche.statut === 'FIXATION_OBJECTIFS' ? 'AUTO_EVALUATION' : fiche.statut;
+    // Déterminer le statut suivant : Si N+2 existe -> VALIDATION_OBJECTIFS_N2, sinon -> VALIDATION_OBJECTIFS_SALARIE
+    let nextStatut = fiche.statut;
+    if (fiche.statut === 'FIXATION_OBJECTIFS') {
+      const salarie = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: fiche.salarieId } });
+      let hasN2 = false;
+      if (salarie?.managerId) {
+        const n1 = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarie.managerId } });
+        if (n1?.managerId) hasN2 = true;
+      }
+      nextStatut = hasN2 ? 'VALIDATION_OBJECTIFS_N2' : 'VALIDATION_OBJECTIFS_SALARIE';
+    }
+
     await this.prisma.fiches_evaluation.update({
       where: { id: fiche.id },
       data: {

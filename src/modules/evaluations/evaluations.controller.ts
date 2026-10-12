@@ -98,6 +98,15 @@ export class EvaluationsController {
     return this.evaluationsService.validateObjectifsN2(id, body, n2Id);
   }
 
+  @Put('evaluations/:id/objectifs/confirmer-salarie')
+  async validateObjectifsSalarie(
+    @Param('id') id: string,
+    @Body() body: { accord?: boolean; observation?: string },
+    @Headers('x-user-id') userId?: string,
+  ) {
+    return this.evaluationsService.validateObjectifsSalarie(id, body, userId);
+  }
+
   @Put('n2/evaluations/:id')
   async validateNotesN2(
     @Param('id') id: string,

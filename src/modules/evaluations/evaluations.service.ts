@@ -190,7 +190,7 @@ export class EvaluationsService {
       });
     }
 
-    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'OBJECTIFS_VALIDES');
+    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'VALIDATION_OBJECTIFS_SALARIE');
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: ficheId },
@@ -218,10 +218,13 @@ export class EvaluationsService {
     dto: { decision: 'APPROUVE' | 'REJETE'; observations?: string },
     n2Id?: string
   ) {
-    const existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
+    let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
+    if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
+    }
     if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
 
-    const nextStatut = dto.decision === 'APPROUVE' ? 'OBJECTIFS_VALIDES' : 'FIXATION_OBJECTIFS';
+    const nextStatut = dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_SALARIE' : 'FIXATION_OBJECTIFS';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: existing.id },
@@ -238,8 +241,46 @@ export class EvaluationsService {
         id: 'hist-' + Date.now(),
         statutFiche: nextStatut,
         action: dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_N2_APPROUVE' : 'VALIDATION_OBJECTIFS_N2_REJETE',
-        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs approuvés par le N+2' : 'Objectifs rejetés par le N+2, retour au N+1'),
+        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs approuvés par le Responsable Direction N+2, transmis au salarié pour confirmation.' : 'Objectifs rejetés par le N+2, retour au N+1'),
         effectueParId: n2Id || 'mgr-n2',
+        ficheId: existing.id,
+        dateAction: new Date(),
+      },
+    });
+
+    return mapFicheToDto(updated);
+  }
+
+  async validateObjectifsSalarie(
+    id: string,
+    dto: { accord?: boolean; observation?: string },
+    userId?: string
+  ) {
+    let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
+    if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
+    }
+    if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
+
+    const nextStatut = 'AUTO_EVALUATION';
+
+    const updated = await this.prisma.fiches_evaluation.update({
+      where: { id: existing.id },
+      data: {
+        statut: nextStatut,
+        observation: dto.observation || existing.observation,
+        updatedAt: new Date(),
+      },
+      include: FICHE_INCLUDE,
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: nextStatut,
+        action: 'CONFIRMATION_OBJECTIFS_SALARIE',
+        commentaire: dto.observation || 'Objectifs de performance acceptés et validés par le salarié. Phase d\'auto-évaluation ouverte.',
+        effectueParId: userId || existing.salarieId,
         ficheId: existing.id,
         dateAction: new Date(),
       },
