@@ -439,6 +439,50 @@ export class EvaluationsService {
     return mapFicheToDto(updated);
   }
 
+  async submitNotesN2(
+    id: string,
+    dto: {
+      notes?: Array<{ objectifId: string; note: number; commentaire?: string }>;
+      observations?: string;
+      decision?: 'APPROUVE' | 'REJETE';
+    },
+    n2Id?: string,
+  ) {
+    if (dto.notes && dto.notes.length > 0) {
+      const examinateurId = n2Id || 'drh-id-1234';
+      for (const item of dto.notes) {
+        await this.prisma.evaluations.upsert({
+          where: {
+            examinateurId_objectifId: {
+              examinateurId,
+              objectifId: item.objectifId,
+            },
+          },
+          update: {
+            note: item.note,
+            observation: item.commentaire,
+            updatedAt: new Date(),
+          },
+          create: {
+            examinateurId,
+            objectifId: item.objectifId,
+            note: item.note,
+            observation: item.commentaire,
+            updatedAt: new Date(),
+          },
+        });
+      }
+    }
+    return this.validateNotesN2(
+      id,
+      {
+        observations: dto.observations,
+        decision: dto.decision || 'APPROUVE',
+      },
+      n2Id,
+    );
+  }
+
   async validateNotesN2(
     id: string,
     dto: {

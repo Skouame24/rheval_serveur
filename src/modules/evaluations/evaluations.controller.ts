@@ -104,7 +104,7 @@ export class EvaluationsController {
     @Body() body: any,
     @Headers('x-user-id') n2Id?: string,
   ) {
-    return this.evaluationsService.validateNotesN2(id, body, n2Id);
+    return this.evaluationsService.submitNotesN2(id, body, n2Id);
   }
 
   @Get('n2/evaluations')
