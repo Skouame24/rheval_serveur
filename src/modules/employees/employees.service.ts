@@ -37,7 +37,16 @@ export class EmployeesService {
       }
     }
 
-    return mapUserToDto(user, n1User, n2User);
+    const teamCount = await this.prisma.utilisateurs_cache.count({
+      where: { managerId: user.id_microsoft },
+    });
+
+    const dto = mapUserToDto(user, n1User, n2User);
+    return {
+      ...dto,
+      hasTeam: teamCount > 0,
+      teamCount,
+    };
   }
 
   async getById(id: string) {
