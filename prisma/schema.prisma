@@ -161,4 +161,20 @@ model utilisateurs_cache {
   telephone         String?
   cycles_evaluation cycles_evaluation[]
   fiches_evaluation fiches_evaluation[]
+  notifications     notifications[]
+}
+
+model notifications {
+  id         String   @id @default(uuid())
+  userId     String
+  titre      String
+  message    String
+  type       String   @default("INFO") // INFO, ACTION, VALIDATION, ALERTE
+  lu         Boolean  @default(false)
+  lien       String?
+  ficheId    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  utilisateurs_cache utilisateurs_cache @relation(fields: [userId], references: [id_microsoft], onDelete: Cascade)
 }

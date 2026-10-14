@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapFicheToDto } from '../../common/fiche.mapper';
 import { getSubordinateIds } from '../../common/hierarchy.helper';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const FICHE_INCLUDE = {
   cycles_evaluation: true,
@@ -21,7 +22,23 @@ const FICHE_INCLUDE = {
 
 @Injectable()
 export class EvaluationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
+
+  private async getHierarchyActors(salarieId: string) {
+    const salarie = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarieId } });
+    let n1 = null;
+    let n2 = null;
+    if (salarie?.managerId) {
+      n1 = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarie.managerId } });
+      if (n1?.managerId) {
+        n2 = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: n1.managerId } });
+      }
+    }
+    return { salarie, n1, n2 };
+  }
 
   async getMyCurrent(userId?: string, userEmail?: string) {
     let uId = userId;
@@ -152,6 +169,53 @@ export class EvaluationsService {
       },
     });
 
+    // Notifications automatiques
+    const { salarie, n1 } = await this.getHierarchyActors(existing.salarieId);
+    if (dto.accord === false) {
+      const rhUsers = await this.prisma.utilisateurs_cache.findMany({
+        where: { role: { in: ['DRH', 'RH'] } },
+      });
+      for (const rh of rhUsers) {
+        this.notificationsService.createNotification({
+          userId: rh.id_microsoft,
+          titre: `Alerte Arbitrage : Désaccord de ${salarie?.nom || 'Collaborateur'}`,
+          message: `${salarie?.nom || 'Le salarié'} a exprimé un désaccord lors du visa de son évaluation. Dossier transmis pour arbitrage DRH. Observation : "${dto.observation || 'Non précisée'}".`,
+          type: 'ALERTE',
+          lien: '/dashboard/pilotage-rh/arbitrages',
+          ficheId: id,
+        });
+      }
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Désaccord exprimé par votre collaborateur : ${salarie?.nom || 'Salarié'}`,
+          message: `${salarie?.nom || 'Votre collaborateur'} a refusé d'apposer son visa d'accord sur son évaluation. Le dossier est transmis pour arbitrage DRH.`,
+          type: 'ALERTE',
+          lien: '/dashboard/mon-equipe/evaluations',
+          ficheId: id,
+        });
+      }
+    } else {
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Évaluation signée et validée : ${salarie?.nom || 'Collaborateur'}`,
+          message: `${salarie?.nom || 'Votre collaborateur'} a validé et signé son évaluation annuelle. Le dossier est officiellement clôturé.`,
+          type: 'INFO',
+          lien: '/dashboard/mon-equipe/evaluations',
+          ficheId: id,
+        });
+      }
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Bilan d'évaluation clôturé avec succès`,
+        message: `Votre visa électronique a été enregistré. Votre bilan officiel est archivé et consultable dans votre historique.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-espace/historique',
+        ficheId: id,
+      });
+    }
+
     return mapFicheToDto(updated);
   }
 
@@ -210,6 +274,36 @@ export class EvaluationsService {
       },
     });
 
+    // Notifications automatiques
+    const { salarie, n1, n2 } = await this.getHierarchyActors(existing.salarieId);
+    if (nextStatut === 'VALIDATION_OBJECTIFS_N2' && n2) {
+      this.notificationsService.createNotification({
+        userId: n2.id_microsoft,
+        titre: `Validation Objectifs requise : ${salarie?.nom || 'Collaborateur'}`,
+        message: `Le manager ${n1?.nom || 'N+1'} a rédigé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Votre validation de Direction est requise.`,
+        type: 'VALIDATION',
+        lien: '/dashboard/mon-equipe/evaluations',
+        ficheId,
+      });
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Objectifs 2026 transmis pour validation`,
+        message: `Votre manager ${n1?.nom || 'N+1'} a défini vos objectifs annuels. Ils sont actuellement soumis à la Direction pour approbation.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-espace',
+        ficheId,
+      });
+    } else {
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Objectifs 2026 prêts pour confirmation`,
+        message: `Votre manager ${n1?.nom || 'N+1'} a fixé vos objectifs. Veuillez vous connecter pour les consulter et donner votre accord.`,
+        type: 'ACTION',
+        lien: '/dashboard/mon-espace',
+        ficheId,
+      });
+    }
+
     return mapFicheToDto(updated);
   }
 
@@ -248,6 +342,40 @@ export class EvaluationsService {
       },
     });
 
+    // Notifications automatiques
+    const { salarie, n1 } = await this.getHierarchyActors(existing.salarieId);
+    if (dto.decision === 'APPROUVE') {
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Objectifs 2026 approuvés par la Direction`,
+        message: `La Direction a validé vos objectifs annuels. Veuillez vous connecter pour les consulter et confirmer votre accord.`,
+        type: 'ACTION',
+        lien: '/dashboard/mon-espace',
+        ficheId: existing.id,
+      });
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Objectifs validés par le N+2 : ${salarie?.nom || 'Collaborateur'}`,
+          message: `La Direction a validé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Le dossier est transmis au salarié pour accord.`,
+          type: 'INFO',
+          lien: '/dashboard/mon-equipe',
+          ficheId: existing.id,
+        });
+      }
+    } else {
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Révision demandée par la Direction : ${salarie?.nom || 'Collaborateur'}`,
+          message: `La Direction a demandé une révision des objectifs de ${salarie?.nom || 'votre collaborateur'}. Remarque : "${dto.observations || 'À corriger'}".`,
+          type: 'ALERTE',
+          lien: '/dashboard/mon-equipe',
+          ficheId: existing.id,
+        });
+      }
+    }
+
     return mapFicheToDto(updated);
   }
 
@@ -285,6 +413,19 @@ export class EvaluationsService {
         dateAction: new Date(),
       },
     });
+
+    // Notifications automatiques
+    const { salarie, n1 } = await this.getHierarchyActors(existing.salarieId);
+    if (n1) {
+      this.notificationsService.createNotification({
+        userId: n1.id_microsoft,
+        titre: `Objectifs confirmés : ${salarie?.nom || 'Collaborateur'}`,
+        message: `${salarie?.nom || 'Le collaborateur'} a validé ses objectifs annuels 2026. La phase d'auto-évaluation est désormais ouverte.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-equipe/evaluations',
+        ficheId: existing.id,
+      });
+    }
 
     return mapFicheToDto(updated);
   }
@@ -353,6 +494,19 @@ export class EvaluationsService {
         dateAction: new Date(),
       },
     });
+
+    // Notifications automatiques
+    const { salarie, n1 } = await this.getHierarchyActors(existing.salarieId);
+    if (n1) {
+      this.notificationsService.createNotification({
+        userId: n1.id_microsoft,
+        titre: `Auto-évaluation complétée : ${salarie?.nom || 'Collaborateur'}`,
+        message: `${salarie?.nom || 'Votre collaborateur'} a renseigné son auto-évaluation annuelle. Vous pouvez désormais mener l'entretien et saisir votre notation.`,
+        type: 'ACTION',
+        lien: '/dashboard/mon-equipe/evaluations',
+        ficheId: id,
+      });
+    }
 
     return mapFicheToDto(updated);
   }
@@ -477,6 +631,36 @@ export class EvaluationsService {
       },
     });
 
+    // Notifications automatiques
+    const { salarie, n1, n2 } = await this.getHierarchyActors(existing.salarieId);
+    if (nextStatut === 'VALIDATION_NOTES_N2' && n2) {
+      this.notificationsService.createNotification({
+        userId: n2.id_microsoft,
+        titre: `Validation Évaluation requise : ${salarie?.nom || 'Collaborateur'}`,
+        message: `Le manager ${n1?.nom || 'N+1'} a complété l'évaluation et les notes de ${salarie?.nom || 'votre collaborateur'}. Votre validation de Direction est requise.`,
+        type: 'VALIDATION',
+        lien: '/dashboard/mon-equipe/evaluations',
+        ficheId,
+      });
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Évaluation transmise pour validation Direction`,
+        message: `Votre manager ${n1?.nom || 'N+1'} a finalisé votre évaluation. Elle est en cours de validation par la Direction.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-espace',
+        ficheId,
+      });
+    } else {
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Votre évaluation annuelle est prête pour visa`,
+        message: `Votre manager ${n1?.nom || 'N+1'} a complété votre évaluation annuelle. Veuillez vous connecter pour consulter vos notes et apposer votre visa.`,
+        type: 'ACTION',
+        lien: '/dashboard/mon-espace',
+        ficheId,
+      });
+    }
+
     return mapFicheToDto(updated);
   }
 
@@ -573,6 +757,40 @@ export class EvaluationsService {
       },
     });
 
+    // Notifications automatiques
+    const { salarie, n1 } = await this.getHierarchyActors(existing.salarieId);
+    if (dto.decision === 'APPROUVE') {
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Évaluation validée par la Direction : Visa requis`,
+        message: `La Direction a validé votre évaluation annuelle. Veuillez prendre connaissance de vos notes et apposer votre visa.`,
+        type: 'ACTION',
+        lien: '/dashboard/mon-espace',
+        ficheId: existing.id,
+      });
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Évaluation validée par le N+2 : ${salarie?.nom || 'Collaborateur'}`,
+          message: `La Direction a validé l'évaluation de ${salarie?.nom || 'votre collaborateur'}. Le dossier est transmis au salarié pour accord et visa.`,
+          type: 'INFO',
+          lien: '/dashboard/mon-equipe',
+          ficheId: existing.id,
+        });
+      }
+    } else {
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Évaluation retournée par la Direction : ${salarie?.nom || 'Collaborateur'}`,
+          message: `La Direction a demandé une révision de l'évaluation de ${salarie?.nom || 'votre collaborateur'}. Remarque : "${dto.observations || 'À corriger'}".`,
+          type: 'ALERTE',
+          lien: '/dashboard/mon-equipe',
+          ficheId: existing.id,
+        });
+      }
+    }
+
     return mapFicheToDto(updated);
   }
 
@@ -620,6 +838,48 @@ export class EvaluationsService {
         dateAction: new Date(),
       },
     });
+
+    // Notifications automatiques
+    const { salarie, n1 } = await this.getHierarchyActors(existing.salarieId);
+    if (targetStatut === 'ARBITRAGE') {
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Arbitrage RH en cours`,
+        message: `La Direction des Ressources Humaines a pris en charge l'arbitrage de votre évaluation annuelle.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-espace',
+        ficheId: existing.id,
+      });
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Arbitrage RH en cours : ${salarie?.nom || 'Collaborateur'}`,
+          message: `La Direction des Ressources Humaines effectue actuellement l'arbitrage sur l'évaluation de ${salarie?.nom || 'votre collaborateur'}.`,
+          type: 'INFO',
+          lien: '/dashboard/mon-equipe',
+          ficheId: existing.id,
+        });
+      }
+    } else {
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Évaluation clôturée par la DRH`,
+        message: `Votre dossier d'évaluation annuelle a été officiellement validé et clôturé par la Direction des Ressources Humaines.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-espace',
+        ficheId: existing.id,
+      });
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Dossier clôturé par la DRH : ${salarie?.nom || 'Collaborateur'}`,
+          message: `Le dossier d'évaluation de ${salarie?.nom || 'votre collaborateur'} a été définitivement validé et clôturé par la Direction des Ressources Humaines.`,
+          type: 'INFO',
+          lien: '/dashboard/mon-equipe',
+          ficheId: existing.id,
+        });
+      }
+    }
 
     return mapFicheToDto(updated);
   }
