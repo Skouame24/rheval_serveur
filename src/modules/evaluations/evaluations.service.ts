@@ -937,21 +937,61 @@ export class EvaluationsService {
       directorId = dir?.id_microsoft;
     }
 
-    let subordinateIds: string[] = [];
-    if (directorId) {
-      subordinateIds = await getSubordinateIds(this.prisma, directorId);
+    if (!directorId) return [];
+
+    const director = await this.prisma.utilisateurs_cache.findUnique({
+      where: { id_microsoft: directorId },
+    });
+
+    const posteLower = (director?.poste || '').toLowerCase();
+    const isGeneralDirector =
+      posteLower.includes('général') ||
+      posteLower.includes('general') ||
+      posteLower.includes('dg') ||
+      posteLower.includes('ceo') ||
+      posteLower.includes('président') ||
+      posteLower.includes('president');
+
+    // 1. Le Directeur Général / PDG a une vision globale sur l'ensemble des fiches
+    if (isGeneralDirector) {
+      const fiches = await this.prisma.fiches_evaluation.findMany({
+        where: { NOT: { salarieId: directorId } },
+        include: FICHE_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+      });
+      return fiches.map(mapFicheToDto);
     }
 
-    const whereClause: any = {};
+    // 2. Directeur de département (ex: Directrice Commerciale, Directeur Technique) :
+    // Périmètre strictement restreint à son arbre hiérarchique ET/OU son département
+    const subordinateIds = await getSubordinateIds(this.prisma, directorId);
+
+    const orConditions: any[] = [];
     if (subordinateIds.length > 0) {
-      whereClause.salarieId = { in: subordinateIds };
+      orConditions.push({ salarieId: { in: subordinateIds } });
     }
-    if (directorId) {
-      whereClause.NOT = { salarieId: directorId };
+
+    if (director?.departement && director.departement.trim() !== '') {
+      orConditions.push({
+        utilisateurs_cache: {
+          departement: { equals: director.departement, mode: 'insensitive' },
+        },
+      });
+    }
+
+    // Si le directeur n'a pas encore de subordonnés rattachés ni de collaborateurs dans son département,
+    // on renvoie une liste vide : IL NE DOIT JAMAIS VOIR LES AUTRES DÉPARTEMENTS (IT, RH, Finance, etc.)
+    if (orConditions.length === 0) {
+      return [];
     }
 
     const fiches = await this.prisma.fiches_evaluation.findMany({
-      where: whereClause,
+      where: {
+        AND: [
+          { NOT: { salarieId: directorId } },
+          { OR: orConditions },
+        ],
+      },
       include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });

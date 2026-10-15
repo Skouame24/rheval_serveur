@@ -87,8 +87,10 @@ export function mapFicheToDto(f: any): any {
           email: f.utilisateurs_cache.email,
           role: f.utilisateurs_cache.role || 'SALARIE',
           poste: f.utilisateurs_cache.poste || '',
+          managerId: f.utilisateurs_cache.managerId || null,
+          departement: f.utilisateurs_cache.departement || '',
         }
-      : { id: f.salarieId, nom: 'Salarié', prenom: '', email: '', role: 'SALARIE', poste: '' },
+      : { id: f.salarieId, nom: 'Salarié', prenom: '', email: '', role: 'SALARIE', poste: '', managerId: null, departement: '' },
     objectifs: mappedObjectifs,
     competences: f.competences || [],
     formations: (f.formations || []).map((form: any) => ({

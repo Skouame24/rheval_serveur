@@ -66,15 +66,24 @@ export const KNOWN_AGILLY_DIRECTORY: Record<string, DirectoryUser> = {
     managerId: 'abe87afa-a80b-4a48-bed2-72b525325c81',
   },
 
-  // Service RH
-  'drh-id-1234': {
-    id_microsoft: 'drh-id-1234',
-    nom: 'Direction des Ressources Humaines',
-    email: 'rh@agilly.net',
-    poste: 'Responsable RH & Développement',
-    departement: 'Ressources Humaines',
-    role: 'RH',
+  // Service RH & Direction RH
+  'c970e84d-5fd5-4cb9-8c4e-7cccc14ad269': {
+    id_microsoft: 'c970e84d-5fd5-4cb9-8c4e-7cccc14ad269',
+    nom: 'Germaine YAO',
+    email: 'germaine.yao@agilly.net',
+    poste: 'Directrice des Ressources Humaines',
+    departement: 'Direction des Ressources Humaines/ Holding',
+    role: 'DRH',
     managerId: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a',
+  },
+  'asst-rh-1144-4a48-bed2-72b525325c81': {
+    id_microsoft: 'asst-rh-1144-4a48-bed2-72b525325c81',
+    nom: 'Fatou DIOP',
+    email: 'assistante.rh@agilly.net',
+    poste: 'Assistante Ressources Humaines',
+    departement: 'Direction des Ressources Humaines/ Holding',
+    role: 'RH',
+    managerId: 'c970e84d-5fd5-4cb9-8c4e-7cccc14ad269',
   },
 };
 
