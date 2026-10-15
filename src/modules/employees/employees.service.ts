@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapUserToDto } from '../../common/user.mapper';
-import { KNOWN_AGILLY_DIRECTORY } from '../../common/directory.constants';
 
 @Injectable()
 export class EmployeesService {
@@ -57,63 +56,15 @@ export class EmployeesService {
     let n1User = null;
     let n2User = null;
 
-    const managerId = user.managerId || KNOWN_AGILLY_DIRECTORY[user.id_microsoft]?.managerId;
-    if (managerId) {
+    if (user.managerId) {
       n1User = await this.prisma.utilisateurs_cache.findUnique({
-        where: { id_microsoft: managerId },
+        where: { id_microsoft: user.managerId },
       });
 
-      if (!n1User && KNOWN_AGILLY_DIRECTORY[managerId]) {
-        const k1 = KNOWN_AGILLY_DIRECTORY[managerId];
-        try {
-          n1User = await this.prisma.utilisateurs_cache.upsert({
-            where: { id_microsoft: managerId },
-            update: {
-              managerId: k1.managerId,
-            },
-            create: {
-              id_microsoft: managerId,
-              nom: k1.nom,
-              email: k1.email,
-              poste: k1.poste,
-              departement: k1.departement,
-              role: k1.role,
-              managerId: k1.managerId,
-              updatedAt: new Date(),
-            },
-          });
-        } catch {
-          n1User = k1 as any;
-        }
-      }
-
-      const n2Id = n1User?.managerId || KNOWN_AGILLY_DIRECTORY[managerId]?.managerId;
-      if (n2Id) {
+      if (n1User?.managerId) {
         n2User = await this.prisma.utilisateurs_cache.findUnique({
-          where: { id_microsoft: n2Id },
+          where: { id_microsoft: n1User.managerId },
         });
-
-        if (!n2User && KNOWN_AGILLY_DIRECTORY[n2Id]) {
-          const k2 = KNOWN_AGILLY_DIRECTORY[n2Id];
-          try {
-            n2User = await this.prisma.utilisateurs_cache.upsert({
-              where: { id_microsoft: n2Id },
-              update: {},
-              create: {
-                id_microsoft: n2Id,
-                nom: k2.nom,
-                email: k2.email,
-                poste: k2.poste,
-                departement: k2.departement,
-                role: k2.role,
-                managerId: k2.managerId,
-                updatedAt: new Date(),
-              },
-            });
-          } catch {
-            n2User = k2 as any;
-          }
-        }
       }
     }
 
