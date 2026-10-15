@@ -1,0 +1,289 @@
+
+// ============================================================
+// prisma/reset-db.ts
+// Script de réinitialisation complète de la base de données RHEVAL
+// Spécial Jour de Démo / Présentation & Tests
+// Usage : npx ts-node prisma/reset-db.ts
+// ============================================================
+
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function resetDatabase() {
+  console.log('\n============================================================');
+  console.log('🔄  RÉINITIALISATION DE LA BASE DE DONNÉES AGILLY RHEVAL');
+  console.log('    Spécial Présentation & Démonstration');
+  console.log('============================================================\n');
+
+  // 1. Nettoyage des tables transactionnelles dans l'ordre strict
+  console.log('1️⃣  Nettoyage des données de test précédentes...');
+
+  await prisma.notifications.deleteMany({});
+  console.log('   ✓ Notifications supprimées (badge cloche remis à 0)');
+
+  await prisma.evaluations.deleteMany({});
+  console.log('   ✓ Notes et appréciations détaillées supprimées');
+
+  await prisma.indicateurs.deleteMany({});
+  console.log('   ✓ Indicateurs supprimés');
+
+  await prisma.objectifs.deleteMany({});
+  console.log('   ✓ Objectifs supprimés');
+
+  await prisma.formations.deleteMany({});
+  console.log('   ✓ Besoins de formation supprimés');
+
+  await prisma.bonus_commissions.deleteMany({});
+  console.log('   ✓ Bonus & commissions supprimés');
+
+  await prisma.competences.deleteMany({});
+  console.log('   ✓ Compétences supprimées');
+
+  await prisma.feedbacks_360.deleteMany({});
+  console.log('   ✓ Feedbacks 360 supprimés');
+
+  await prisma.suggestions.deleteMany({});
+  console.log('   ✓ Suggestions supprimées');
+
+  await prisma.historique_evaluation.deleteMany({});
+  console.log('   ✓ Historique d\'audit des fiches réinitialisé');
+
+  await prisma.fiches_evaluation.deleteMany({});
+  console.log('   ✓ Fiches d\'évaluation supprimées');
+
+  // 2. Initialisation de la Campagne d'Évaluation 2026
+  console.log('\n2️⃣  Création / Mise à jour de la Campagne 2026...');
+  const cycleId = 'cyc-campagne-2026';
+  const cycle = await prisma.cycles_evaluation.upsert({
+    where: { id: cycleId },
+    update: {
+      libelle: "Campagne Annuelle d'Évaluation 2026",
+      annee: 2026,
+      typeCycle: 'ANNUEL',
+      statut: 'ACTIF',
+      dateOuverture: new Date('2026-01-01T00:00:00.000Z'),
+      dateFermeture: new Date('2026-12-31T23:59:59.000Z'),
+      dateDebutFixation: new Date('2026-01-01T00:00:00.000Z'),
+      dateFinFixation: new Date('2026-03-31T23:59:59.000Z'),
+      dateDebutEval: new Date('2026-10-01T00:00:00.000Z'),
+      dateFinEval: new Date('2026-12-31T23:59:59.000Z'),
+      updatedAt: new Date(),
+    },
+    create: {
+      id: cycleId,
+      libelle: "Campagne Annuelle d'Évaluation 2026",
+      annee: 2026,
+      typeCycle: 'ANNUEL',
+      statut: 'ACTIF',
+      dateOuverture: new Date('2026-01-01T00:00:00.000Z'),
+      dateFermeture: new Date('2026-12-31T23:59:59.000Z'),
+      dateDebutFixation: new Date('2026-01-01T00:00:00.000Z'),
+      dateFinFixation: new Date('2026-03-31T23:59:59.000Z'),
+      dateDebutEval: new Date('2026-10-01T00:00:00.000Z'),
+      dateFinEval: new Date('2026-12-31T23:59:59.000Z'),
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`   ✓ Campagne active : "${cycle.libelle}" (Statut: ${cycle.statut})`);
+
+  // 3. Configuration de la hiérarchie d'entreprise réelle dans utilisateurs_cache
+  console.log('\n3️⃣  Configuration de la hiérarchie officielle...');
+
+  // N+2 / Direction Générale
+  const n2Director = await prisma.utilisateurs_cache.upsert({
+    where: { id_microsoft: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a' },
+    update: {
+      nom: 'Christian BAMBA',
+      email: 'christian.bamba@agilly.net',
+      poste: 'Directeur Général',
+      departement: 'Direction Générale',
+      role: 'N2',
+      isCodir: true,
+      updatedAt: new Date(),
+    },
+    create: {
+      id_microsoft: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a',
+      nom: 'Christian BAMBA',
+      email: 'christian.bamba@agilly.net',
+      poste: 'Directeur Général',
+      departement: 'Direction Générale',
+      role: 'N2',
+      isCodir: true,
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`   ✓ Direction N+2 : ${n2Director.nom} (${n2Director.email}) - Poste: ${n2Director.poste}`);
+
+  // N+1 Managers sous la Direction N+2
+  const n1Managers = [
+    {
+      id_microsoft: 'abe87afa-a80b-4a48-bed2-72b525325c81',
+      nom: 'Sevan AKOUMIA',
+      email: 'sevan.akoumia@agilly.net',
+      poste: 'Responsable Technique Digital',
+      departement: 'Technique & Digital',
+      role: 'N1',
+      managerId: n2Director.id_microsoft,
+    },
+    {
+      id_microsoft: '4f1e0426-b3f2-446b-9279-d830964cc8c8',
+      nom: 'Ange Donatien EFFOLI',
+      email: 'donatien.effoli@agilly.net',
+      poste: 'Manager des Services',
+      departement: 'Services',
+      role: 'N1',
+      managerId: n2Director.id_microsoft,
+    },
+    {
+      id_microsoft: '8eb2a86c-e426-49b6-ad49-50d19bf55ce5',
+      nom: "Wilfried N'GUETTA",
+      email: 'anicet.nguetta@agilly.net',
+      poste: 'Responsable IT Interne',
+      departement: 'IT',
+      role: 'N1',
+      managerId: n2Director.id_microsoft,
+    },
+  ];
+
+  for (const m of n1Managers) {
+    const mgr = await prisma.utilisateurs_cache.upsert({
+      where: { id_microsoft: m.id_microsoft },
+      update: {
+        nom: m.nom,
+        email: m.email,
+        poste: m.poste,
+        departement: m.departement,
+        role: m.role,
+        managerId: m.managerId,
+        updatedAt: new Date(),
+      },
+      create: {
+        id_microsoft: m.id_microsoft,
+        nom: m.nom,
+        email: m.email,
+        poste: m.poste,
+        departement: m.departement,
+        role: m.role,
+        managerId: m.managerId,
+        updatedAt: new Date(),
+      },
+    });
+    console.log(`   ✓ Responsable N+1 : ${mgr.nom} (${mgr.email}) - Poste: ${mgr.poste} -> N+2: ${n2Director.nom}`);
+  }
+
+  // Collaborateur / Salarié sous Sevan AKOUMIA
+  const salarie = await prisma.utilisateurs_cache.upsert({
+    where: { id_microsoft: '0a5c4c64-abdd-4f4f-a3af-00057ebdddfb' },
+    update: {
+      nom: 'Ebenezer Samuel KOUAME',
+      email: 'ebenezer.kouame@agilly.net',
+      poste: 'Développeur Fullstack',
+      departement: 'Technique & Digital',
+      role: 'SALARIE',
+      managerId: 'abe87afa-a80b-4a48-bed2-72b525325c81',
+      updatedAt: new Date(),
+    },
+    create: {
+      id_microsoft: '0a5c4c64-abdd-4f4f-a3af-00057ebdddfb',
+      nom: 'Ebenezer Samuel KOUAME',
+      email: 'ebenezer.kouame@agilly.net',
+      poste: 'Développeur Fullstack',
+      departement: 'Technique & Digital',
+      role: 'SALARIE',
+      managerId: 'abe87afa-a80b-4a48-bed2-72b525325c81',
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`   ✓ Collaborateur : ${salarie.nom} (${salarie.email}) -> N+1: Sevan AKOUMIA`);
+
+  // Service RH / DRH
+  const drh = await prisma.utilisateurs_cache.upsert({
+    where: { id_microsoft: 'drh-id-1234' },
+    update: {
+      nom: 'Direction des Ressources Humaines',
+      email: 'rh@agilly.net',
+      poste: 'Responsable RH & Développement',
+      departement: 'Ressources Humaines',
+      role: 'RH',
+      updatedAt: new Date(),
+    },
+    create: {
+      id_microsoft: 'drh-id-1234',
+      nom: 'Direction des Ressources Humaines',
+      email: 'rh@agilly.net',
+      poste: 'Responsable RH & Développement',
+      departement: 'Ressources Humaines',
+      role: 'RH',
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`   ✓ Espace RH : ${drh.nom} (${drh.email})`);
+
+  // 4. Création des fiches vierges prêtes pour la démonstration
+  console.log('\n4️⃣  Génération des fiches d\'évaluation initiales (Statut : FIXATION_OBJECTIFS)...');
+
+  const evaluatedUsers = [salarie, ...n1Managers];
+
+  for (const user of evaluatedUsers) {
+    const ficheId = 'fic-' + user.id_microsoft.substring(0, 8) + '-2026';
+    const fiche = await prisma.fiches_evaluation.create({
+      data: {
+        id: ficheId,
+        statut: 'FIXATION_OBJECTIFS',
+        cycleId: cycleId,
+        salarieId: user.id_microsoft,
+        typeEvaluation: 'STANDARD',
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        statutFiche: 'FIXATION_OBJECTIFS',
+        action: 'OUVERTURE_CYCLE',
+        commentaire: 'Ouverture de la campagne d\'évaluation 2026. Phase de fixation des objectifs.',
+        effectueParId: 'drh-id-1234',
+        ficheId: fiche.id,
+        dateAction: new Date(),
+      },
+    });
+
+    console.log(`   ✓ Fiche créée pour ${user.nom} (ID: ${fiche.id}, Statut: FIXATION_OBJECTIFS)`);
+  }
+
+  console.log('\n============================================================');
+  console.log('✅  BASE DE DONNÉES PRÊTE POUR LA PRÉSENTATION !');
+  console.log('============================================================');
+  console.log(`
+📋 GUIDE DU SCÉNARIO DE DÉMO RECOMMANDÉ :
+
+1. Se connecter avec le compte Manager : Sevan AKOUMIA (sevan.akoumia@agilly.net)
+   - Aller sur "Mon Équipe" > "Évaluations"
+   - Ouvrir le dossier de "Ebenezer Samuel KOUAME" (statut : Fixation des objectifs)
+   - Saisir 2 ou 3 objectifs (ex: Projet Portail RHEVAL 50%, Qualité & Délais 50%)
+   - Cliquer sur "Soumettre les objectifs"
+
+2. Observer la Notification en direct :
+   - Le N+2 (Christian BAMBA) reçoit une notification "Validation Objectifs requise"
+   - La cloche du Header affiche le badge 1
+
+3. Se connecter avec le Directeur N+2 : Christian BAMBA (christian.bamba@agilly.net)
+   - Aller sur "Mon Équipe" > "Validations N+2"
+   - Valider les objectifs
+
+4. Se connecter avec le Collaborateur : Ebenezer Samuel KOUAME (ebenezer.kouame@agilly.net)
+   - Notification reçue : "Objectifs 2026 approuvés par la Direction"
+   - Le salarié valide ses objectifs -> Passage immédiat en "Auto-évaluation" !
+`);
+}
+
+resetDatabase()
+  .catch((e) => {
+    console.error('❌ Erreur lors de la réinitialisation :', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
