@@ -72,13 +72,32 @@ export class NotificationsService {
   }
 
   /**
+   * Résout l'identifiant Microsoft (id_microsoft) d'un utilisateur, qu'on lui passe un id ou un email
+   */
+  private async resolveUserId(userId?: string): Promise<string[]> {
+    if (!userId) return [];
+    const candidates = [userId];
+    if (userId.includes('@')) {
+      const u = await this.prisma.utilisateurs_cache.findUnique({ where: { email: userId } });
+      if (u?.id_microsoft) candidates.push(u.id_microsoft);
+    } else {
+      const u = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: userId } });
+      if (u?.email) candidates.push(u.email);
+    }
+    return candidates;
+  }
+
+  /**
    * Récupère la liste des notifications réelles de l'utilisateur connecté
    */
   async getMyNotifications(userId?: string, limit = 50) {
     if (!userId) return [];
+    const userIds = await this.resolveUserId(userId);
 
     return this.prisma.notifications.findMany({
-      where: { userId },
+      where: {
+        userId: { in: userIds },
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -89,10 +108,11 @@ export class NotificationsService {
    */
   async getUnreadCount(userId?: string): Promise<number> {
     if (!userId) return 0;
+    const userIds = await this.resolveUserId(userId);
 
     return this.prisma.notifications.count({
       where: {
-        userId,
+        userId: { in: userIds },
         lu: false,
       },
     });
@@ -107,7 +127,6 @@ export class NotificationsService {
     return this.prisma.notifications.updateMany({
       where: {
         id,
-        ...(userId ? { userId } : {}),
       },
       data: {
         lu: true,
@@ -120,10 +139,11 @@ export class NotificationsService {
    */
   async markAllAsRead(userId?: string) {
     if (!userId) return;
+    const userIds = await this.resolveUserId(userId);
 
     return this.prisma.notifications.updateMany({
       where: {
-        userId,
+        userId: { in: userIds },
         lu: false,
       },
       data: {

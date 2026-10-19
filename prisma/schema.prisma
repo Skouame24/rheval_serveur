@@ -178,3 +178,4 @@ model notifications {
 
   utilisateurs_cache utilisateurs_cache @relation(fields: [userId], references: [id_microsoft], onDelete: Cascade)
 }
+

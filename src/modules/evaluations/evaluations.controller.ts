@@ -117,8 +117,11 @@ export class EvaluationsController {
   }
 
   @Get('n2/evaluations')
-  async getN2TeamEvaluations(@Headers('x-user-id') n2Id?: string) {
-    return this.evaluationsService.getN2TeamEvaluations(n2Id);
+  async getN2TeamEvaluations(
+    @Headers('x-user-id') n2Id?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.evaluationsService.getN2TeamEvaluations(n2Id, userEmail);
   }
 
   @Put('rh/evaluations/:id/valider')
@@ -136,7 +139,10 @@ export class EvaluationsController {
   }
 
   @Get('n1/evaluations')
-  async getN1TeamEvaluations(@Headers('x-user-id') managerId?: string) {
-    return this.evaluationsService.getN1TeamEvaluations(managerId);
+  async getN1TeamEvaluations(
+    @Headers('x-user-id') managerId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.evaluationsService.getN1TeamEvaluations(managerId, userEmail);
   }
 }

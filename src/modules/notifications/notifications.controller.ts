@@ -8,11 +8,13 @@ export class NotificationsController {
   @Get()
   async getMyNotifications(
     @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
     @Query('limit') limit?: string,
   ) {
+    const effectiveUserId = userId || userEmail;
     const lim = limit ? parseInt(limit, 10) : 50;
-    const notifications = await this.notificationsService.getMyNotifications(userId, lim);
-    const unreadCount = await this.notificationsService.getUnreadCount(userId);
+    const notifications = await this.notificationsService.getMyNotifications(effectiveUserId, lim);
+    const unreadCount = await this.notificationsService.getUnreadCount(effectiveUserId);
     return {
       notifications,
       unreadCount,
@@ -20,8 +22,12 @@ export class NotificationsController {
   }
 
   @Get('unread-count')
-  async getUnreadCount(@Headers('x-user-id') userId?: string) {
-    const count = await this.notificationsService.getUnreadCount(userId);
+  async getUnreadCount(
+    @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    const effectiveUserId = userId || userEmail;
+    const count = await this.notificationsService.getUnreadCount(effectiveUserId);
     return { count };
   }
 
@@ -29,14 +35,20 @@ export class NotificationsController {
   async markAsRead(
     @Param('id') id: string,
     @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
   ) {
-    await this.notificationsService.markAsRead(id, userId);
+    const effectiveUserId = userId || userEmail;
+    await this.notificationsService.markAsRead(id, effectiveUserId);
     return { success: true };
   }
 
   @Post('read-all')
-  async markAllAsRead(@Headers('x-user-id') userId?: string) {
-    await this.notificationsService.markAllAsRead(userId);
+  async markAllAsRead(
+    @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    const effectiveUserId = userId || userEmail;
+    await this.notificationsService.markAllAsRead(effectiveUserId);
     return { success: true };
   }
 }

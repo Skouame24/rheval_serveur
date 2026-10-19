@@ -147,7 +147,7 @@ export class ObjectivesService {
         fiche = await this.prisma.fiches_evaluation.create({
           data: {
             id: 'fic-' + targetSalarieId.substring(0, 8) + '-' + Date.now().toString(36),
-            statut: 'AUTO_EVALUATION',
+            statut: 'FIXATION_OBJECTIFS',
             cycleId: cycleId,
             salarieId: targetSalarieId,
             updatedAt: new Date(),
@@ -238,7 +238,7 @@ export class ObjectivesService {
         const n1 = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarie.managerId } });
         if (n1?.managerId) hasN2 = true;
       }
-      nextStatut = hasN2 ? 'VALIDATION_OBJECTIFS_N2' : 'VALIDATION_OBJECTIFS_SALARIE';
+      nextStatut = hasN2 ? 'VALIDATION_OBJECTIFS_N2' : 'EVALUATION_N1';
     }
 
     await this.prisma.fiches_evaluation.update({

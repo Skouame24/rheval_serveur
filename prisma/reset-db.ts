@@ -1,9 +1,9 @@
-
 // ============================================================
 // prisma/reset-db.ts
 // Script de réinitialisation complète de la base de données RHEVAL
-// Spécial Jour de Démo / Présentation & Tests
-// Usage : npx ts-node prisma/reset-db.ts
+// Configuration officielle de la hiérarchie pour démonstrations & tests
+// Hiérarchie : PDG -> DRH + Managers -> Assistante RH + Collaborateurs
+// Usage : npm run db:reset
 // ============================================================
 
 import { PrismaClient } from '@prisma/client';
@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 async function resetDatabase() {
   console.log('\n============================================================');
   console.log('🔄  RÉINITIALISATION DE LA BASE DE DONNÉES AGILLY RHEVAL');
-  console.log('    Spécial Présentation & Démonstration');
+  console.log('    Configuration Hiérarchie Complète (PDG, DRH, Assistante, Managers, Salarié)');
   console.log('============================================================\n');
 
   // 1. Nettoyage des tables transactionnelles dans l'ordre strict
@@ -90,32 +90,88 @@ async function resetDatabase() {
   // 3. Configuration de la hiérarchie d'entreprise réelle dans utilisateurs_cache
   console.log('\n3️⃣  Configuration de la hiérarchie officielle...');
 
-  // N+2 / Direction Générale
-  const n2Director = await prisma.utilisateurs_cache.upsert({
+  // A. PDG / Direction Générale
+  const pdg = await prisma.utilisateurs_cache.upsert({
     where: { id_microsoft: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a' },
     update: {
       nom: 'Christian BAMBA',
       email: 'christian.bamba@agilly.net',
-      poste: 'Directeur Général',
+      poste: 'PDG & Directeur Général',
       departement: 'Direction Générale',
       role: 'N2',
       isCodir: true,
+      managerId: null,
       updatedAt: new Date(),
     },
     create: {
       id_microsoft: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a',
       nom: 'Christian BAMBA',
       email: 'christian.bamba@agilly.net',
-      poste: 'Directeur Général',
+      poste: 'PDG & Directeur Général',
       departement: 'Direction Générale',
       role: 'N2',
       isCodir: true,
+      managerId: null,
       updatedAt: new Date(),
     },
   });
-  console.log(`   ✓ Direction N+2 : ${n2Director.nom} (${n2Director.email}) - Poste: ${n2Director.poste}`);
+  console.log(`   👑 PDG : ${pdg.nom} (${pdg.email}) - Poste: ${pdg.poste}`);
 
-  // N+1 Managers sous la Direction N+2
+  // B. Directrice des Ressources Humaines (DRH) -> Reporte au PDG
+  const drh = await prisma.utilisateurs_cache.upsert({
+    where: { id_microsoft: 'c970e84d-5fd5-4cb9-8c4e-7cccc14ad269' },
+    update: {
+      nom: 'Germaine YAO',
+      email: 'germaine.yao@agilly.net',
+      poste: 'Directrice des Ressources Humaines',
+      departement: 'Direction des Ressources Humaines',
+      role: 'DRH',
+      isCodir: true,
+      managerId: pdg.id_microsoft,
+      updatedAt: new Date(),
+    },
+    create: {
+      id_microsoft: 'c970e84d-5fd5-4cb9-8c4e-7cccc14ad269',
+      nom: 'Germaine YAO',
+      email: 'germaine.yao@agilly.net',
+      poste: 'Directrice des Ressources Humaines',
+      departement: 'Direction des Ressources Humaines',
+      role: 'DRH',
+      isCodir: true,
+      managerId: pdg.id_microsoft,
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`   💼 DRH : ${drh.nom} (${drh.email}) - N+1 direct: PDG (${pdg.nom})`);
+
+  // C. Assistante RH -> Reporte directement à la DRH (Germaine YAO)
+  const assistanteRh = await prisma.utilisateurs_cache.upsert({
+    where: { id_microsoft: 'asst-rh-1144-4a48-bed2-72b525325c81' },
+    update: {
+      nom: 'Fatou DIOP',
+      email: 'assistante.rh@agilly.net',
+      poste: 'Assistante Ressources Humaines',
+      departement: 'Direction des Ressources Humaines',
+      role: 'RH',
+      isCodir: false,
+      managerId: drh.id_microsoft,
+      updatedAt: new Date(),
+    },
+    create: {
+      id_microsoft: 'asst-rh-1144-4a48-bed2-72b525325c81',
+      nom: 'Fatou DIOP',
+      email: 'assistante.rh@agilly.net',
+      poste: 'Assistante Ressources Humaines',
+      departement: 'Direction des Ressources Humaines',
+      role: 'RH',
+      isCodir: false,
+      managerId: drh.id_microsoft,
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`   📋 Assistante RH : ${assistanteRh.nom} (${assistanteRh.email}) - Manager N+1: DRH (${drh.nom})`);
+
+  // D. Managers N+1 sous le PDG
   const n1Managers = [
     {
       id_microsoft: 'abe87afa-a80b-4a48-bed2-72b525325c81',
@@ -124,7 +180,7 @@ async function resetDatabase() {
       poste: 'Responsable Technique Digital',
       departement: 'Technique & Digital',
       role: 'N1',
-      managerId: n2Director.id_microsoft,
+      managerId: pdg.id_microsoft,
     },
     {
       id_microsoft: '4f1e0426-b3f2-446b-9279-d830964cc8c8',
@@ -133,7 +189,7 @@ async function resetDatabase() {
       poste: 'Manager des Services',
       departement: 'Services',
       role: 'N1',
-      managerId: n2Director.id_microsoft,
+      managerId: pdg.id_microsoft,
     },
     {
       id_microsoft: '8eb2a86c-e426-49b6-ad49-50d19bf55ce5',
@@ -142,7 +198,7 @@ async function resetDatabase() {
       poste: 'Responsable IT Interne',
       departement: 'IT',
       role: 'N1',
-      managerId: n2Director.id_microsoft,
+      managerId: pdg.id_microsoft,
     },
   ];
 
@@ -169,10 +225,10 @@ async function resetDatabase() {
         updatedAt: new Date(),
       },
     });
-    console.log(`   ✓ Responsable N+1 : ${mgr.nom} (${mgr.email}) - Poste: ${mgr.poste} -> N+2: ${n2Director.nom}`);
+    console.log(`   👔 Responsable N+1 : ${mgr.nom} (${mgr.email}) -> Reporte au PDG (${pdg.nom})`);
   }
 
-  // Collaborateur / Salarié sous Sevan AKOUMIA
+  // E. Salarié sous Sevan AKOUMIA
   const salarie = await prisma.utilisateurs_cache.upsert({
     where: { id_microsoft: '0a5c4c64-abdd-4f4f-a3af-00057ebdddfb' },
     update: {
@@ -195,35 +251,13 @@ async function resetDatabase() {
       updatedAt: new Date(),
     },
   });
-  console.log(`   ✓ Collaborateur : ${salarie.nom} (${salarie.email}) -> N+1: Sevan AKOUMIA`);
+  console.log(`   👤 Collaborateur : ${salarie.nom} (${salarie.email}) -> N+1: Sevan AKOUMIA -> N+2: PDG (${pdg.nom})`);
 
-  // Service RH / DRH
-  const drh = await prisma.utilisateurs_cache.upsert({
-    where: { id_microsoft: 'drh-id-1234' },
-    update: {
-      nom: 'Direction des Ressources Humaines',
-      email: 'rh@agilly.net',
-      poste: 'Responsable RH & Développement',
-      departement: 'Ressources Humaines',
-      role: 'RH',
-      updatedAt: new Date(),
-    },
-    create: {
-      id_microsoft: 'drh-id-1234',
-      nom: 'Direction des Ressources Humaines',
-      email: 'rh@agilly.net',
-      poste: 'Responsable RH & Développement',
-      departement: 'Ressources Humaines',
-      role: 'RH',
-      updatedAt: new Date(),
-    },
-  });
-  console.log(`   ✓ Espace RH : ${drh.nom} (${drh.email})`);
-
-  // 4. Création des fiches vierges prêtes pour la démonstration
+  // 4. Création des fiches d'évaluation initiales prêtes pour les tests
   console.log('\n4️⃣  Génération des fiches d\'évaluation initiales (Statut : FIXATION_OBJECTIFS)...');
 
-  const evaluatedUsers = [salarie, ...n1Managers];
+  // Fiches pour : Collaborateur, Assistante RH, DRH, et Managers N+1
+  const evaluatedUsers = [salarie, assistanteRh, drh, ...n1Managers];
 
   for (const user of evaluatedUsers) {
     const ficheId = 'fic-' + user.id_microsoft.substring(0, 8) + '-2026';
@@ -243,8 +277,8 @@ async function resetDatabase() {
         id: 'hist-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
         statutFiche: 'FIXATION_OBJECTIFS',
         action: 'OUVERTURE_CYCLE',
-        commentaire: 'Ouverture de la campagne d\'évaluation 2026. Phase de fixation des objectifs.',
-        effectueParId: 'drh-id-1234',
+        commentaire: 'Ouverture de la campagne 2026. Phase de fixation des objectifs.',
+        effectueParId: drh.id_microsoft,
         ficheId: fiche.id,
         dateAction: new Date(),
       },
@@ -254,28 +288,44 @@ async function resetDatabase() {
   }
 
   console.log('\n============================================================');
-  console.log('✅  BASE DE DONNÉES PRÊTE POUR LA PRÉSENTATION !');
+  console.log('✅  BASE DE DONNÉES PRÊTE POUR TOUS LES TESTS !');
   console.log('============================================================');
   console.log(`
-📋 GUIDE DU SCÉNARIO DE DÉMO RECOMMANDÉ :
+📋 COMPTES DE TEST DISPONIBLES :
 
-1. Se connecter avec le compte Manager : Sevan AKOUMIA (sevan.akoumia@agilly.net)
-   - Aller sur "Mon Équipe" > "Évaluations"
-   - Ouvrir le dossier de "Ebenezer Samuel KOUAME" (statut : Fixation des objectifs)
-   - Saisir 2 ou 3 objectifs (ex: Projet Portail RHEVAL 50%, Qualité & Délais 50%)
-   - Cliquer sur "Soumettre les objectifs"
+1. PDG & Directeur Général :
+   - Nom   : Christian BAMBA
+   - Email : christian.bamba@agilly.net
+   - Rôle  : N2 / PDG
+   - Voit  : Ensemble de l'entreprise (N2 pour toute la structure), valide les objectifs et notes des managers et de la DRH.
 
-2. Observer la Notification en direct :
-   - Le N+2 (Christian BAMBA) reçoit une notification "Validation Objectifs requise"
-   - La cloche du Header affiche le badge 1
+2. Directrice des Ressources Humaines (DRH) :
+   - Nom   : Germaine YAO
+   - Email : germaine.yao@agilly.net
+   - Rôle  : DRH
+   - Double casquette :
+     a) Manager N+1 de son Assistante RH (Fatou DIOP) -> fixe ses objectifs et l'évalue dans "Mon Équipe".
+     b) Pilotage RH central de l'entreprise (Arbitrages, clôtures, synthèse globale).
+   - N+1   : Le PDG (Christian BAMBA) qui l'évalue.
 
-3. Se connecter avec le Directeur N+2 : Christian BAMBA (christian.bamba@agilly.net)
-   - Aller sur "Mon Équipe" > "Validations N+2"
-   - Valider les objectifs
+3. Assistante RH :
+   - Nom   : Fatou DIOP
+   - Email : assistante.rh@agilly.net
+   - Rôle  : RH / Salarié
+   - Évaluée par : Germaine YAO (DRH).
 
-4. Se connecter avec le Collaborateur : Ebenezer Samuel KOUAME (ebenezer.kouame@agilly.net)
-   - Notification reçue : "Objectifs 2026 approuvés par la Direction"
-   - Le salarié valide ses objectifs -> Passage immédiat en "Auto-évaluation" !
+4. Responsable Technique Digital (Manager N+1) :
+   - Nom   : Sevan AKOUMIA
+   - Email : sevan.akoumia@agilly.net
+   - Rôle  : N1
+   - Voit  : Son collaborateur direct (Ebenezer Samuel KOUAME).
+   - N+2   : Le PDG (Christian BAMBA).
+
+5. Collaborateur Développeur :
+   - Nom   : Ebenezer Samuel KOUAME
+   - Email : ebenezer.kouame@agilly.net
+   - Rôle  : SALARIE
+   - Voit  : "Mon Espace" avec ses objectifs et sa fiche d'évaluation en lecture seule.
 `);
 }
 

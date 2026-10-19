@@ -254,7 +254,7 @@ export class EvaluationsService {
       });
     }
 
-    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'VALIDATION_OBJECTIFS_SALARIE');
+    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'EVALUATION_N1');
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: ficheId },
@@ -267,7 +267,9 @@ export class EvaluationsService {
         id: 'hist-' + Date.now(),
         statutFiche: nextStatut,
         action: 'FIXATION_OBJECTIFS_SOUMISE',
-        commentaire: 'Objectifs fixés par le N+1 et soumis pour validation',
+        commentaire: nextStatut === 'VALIDATION_OBJECTIFS_N2'
+          ? 'Objectifs fixés par le N+1 et soumis pour validation Direction N+2'
+          : 'Objectifs fixés par le N+1. Phase d\'évaluation et notation N+1 ouverte.',
         effectueParId: managerId || 'mgr-n1',
         ficheId: ficheId,
         dateAction: new Date(),
@@ -318,7 +320,7 @@ export class EvaluationsService {
     }
     if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
 
-    const nextStatut = dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_SALARIE' : 'FIXATION_OBJECTIFS';
+    const nextStatut = dto.decision === 'APPROUVE' ? 'EVALUATION_N1' : 'FIXATION_OBJECTIFS';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: existing.id },
@@ -335,7 +337,7 @@ export class EvaluationsService {
         id: 'hist-' + Date.now(),
         statutFiche: nextStatut,
         action: dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_N2_APPROUVE' : 'VALIDATION_OBJECTIFS_N2_REJETE',
-        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs approuvés par le Responsable Direction N+2, transmis au salarié pour confirmation.' : 'Objectifs rejetés par le N+2, retour au N+1'),
+        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs approuvés par la Direction. Phase d\'évaluation et notation N+1 ouverte directement.' : 'Objectifs rejetés par la Direction, retour au N+1'),
         effectueParId: n2Id || 'mgr-n2',
         ficheId: existing.id,
         dateAction: new Date(),
@@ -348,18 +350,18 @@ export class EvaluationsService {
       this.notificationsService.createNotification({
         userId: existing.salarieId,
         titre: `Objectifs 2026 approuvés par la Direction`,
-        message: `La Direction a validé vos objectifs annuels. Veuillez vous connecter pour les consulter et confirmer votre accord.`,
-        type: 'ACTION',
+        message: `La Direction a validé vos objectifs annuels 2026. L'évaluation et la notation par votre responsable sont désormais ouvertes.`,
+        type: 'INFO',
         lien: '/dashboard/mon-espace',
         ficheId: existing.id,
       });
       if (n1) {
         this.notificationsService.createNotification({
           userId: n1.id_microsoft,
-          titre: `Objectifs validés par le N+2 : ${salarie?.nom || 'Collaborateur'}`,
-          message: `La Direction a validé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Le dossier est transmis au salarié pour accord.`,
-          type: 'INFO',
-          lien: '/dashboard/mon-equipe',
+          titre: `Objectifs validés par la Direction : ${salarie?.nom || 'Collaborateur'}`,
+          message: `La Direction a validé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Vous pouvez désormais procéder à son évaluation et à sa notation.`,
+          type: 'ACTION',
+          lien: '/dashboard/mon-equipe/evaluations',
           ficheId: existing.id,
         });
       }
@@ -390,7 +392,7 @@ export class EvaluationsService {
     }
     if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
 
-    const nextStatut = 'AUTO_EVALUATION';
+    const nextStatut = 'EVALUATION_N1';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: existing.id },
@@ -407,7 +409,7 @@ export class EvaluationsService {
         id: 'hist-' + Date.now(),
         statutFiche: nextStatut,
         action: 'CONFIRMATION_OBJECTIFS_SALARIE',
-        commentaire: dto.observation || 'Objectifs de performance acceptés et validés par le salarié. Phase d\'auto-évaluation ouverte.',
+        commentaire: dto.observation || 'Objectifs de performance acceptés par le salarié. Phase d\'évaluation et notation Responsable ouverte.',
         effectueParId: userId || existing.salarieId,
         ficheId: existing.id,
         dateAction: new Date(),
@@ -927,9 +929,15 @@ export class EvaluationsService {
     return fiches.map(mapFicheToDto);
   }
 
-  async getN2TeamEvaluations(n2Id?: string) {
+  async getN2TeamEvaluations(n2Id?: string, userEmail?: string) {
     await this.ensureFichesForActiveCycle();
     let directorId = n2Id;
+    if (!directorId && userEmail) {
+      const dir = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+      directorId = dir?.id_microsoft;
+    }
     if (!directorId) {
       const dir = await this.prisma.utilisateurs_cache.findFirst({
         where: { role: 'N2' },
@@ -950,7 +958,8 @@ export class EvaluationsService {
       posteLower.includes('dg') ||
       posteLower.includes('ceo') ||
       posteLower.includes('président') ||
-      posteLower.includes('president');
+      posteLower.includes('president') ||
+      posteLower.includes('pdg');
 
     // 1. Le Directeur Général / PDG a une vision globale sur l'ensemble des fiches
     if (isGeneralDirector) {
@@ -998,8 +1007,14 @@ export class EvaluationsService {
     return fiches.map(mapFicheToDto);
   }
 
-  async getN1TeamEvaluations(managerId?: string) {
+  async getN1TeamEvaluations(managerId?: string, userEmail?: string) {
     let mgrId = managerId;
+    if (!mgrId && userEmail) {
+      const mgr = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+      mgrId = mgr?.id_microsoft;
+    }
     if (!mgrId) {
       const mgr = await this.prisma.utilisateurs_cache.findFirst({
         where: { role: { in: ['N1', 'N2', 'DRH'] } },
