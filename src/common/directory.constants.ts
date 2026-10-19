@@ -48,7 +48,18 @@ export const KNOWN_AGILLY_DIRECTORY: Record<string, DirectoryUser> = {
     managerId: 'c970e84d-5fd5-4cb9-8c4e-7cccc14ad269',
   },
 
-  // 4. Manager N+1 (Technique & Digital) -> Reporte au PDG
+  // 4. Directeur N+2 (Technique & Opérations) -> Reporte au PDG
+  'dir-n2-7777-4a48-bed2-72b525325c81': {
+    id_microsoft: 'dir-n2-7777-4a48-bed2-72b525325c81',
+    nom: 'Marc KOFFI',
+    email: 'directeur.n2@agilly.net',
+    poste: 'Directeur Technique & Opérations',
+    departement: 'Technique & Digital',
+    role: 'N2',
+    managerId: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a',
+  },
+
+  // 5. Manager N+1 (Technique & Digital) -> Reporte au Directeur N+2 (Marc KOFFI)
   'abe87afa-a80b-4a48-bed2-72b525325c81': {
     id_microsoft: 'abe87afa-a80b-4a48-bed2-72b525325c81',
     nom: 'Sevan AKOUMIA',
@@ -56,7 +67,7 @@ export const KNOWN_AGILLY_DIRECTORY: Record<string, DirectoryUser> = {
     poste: 'Responsable Technique Digital',
     departement: 'Technique & Digital',
     role: 'N1',
-    managerId: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a',
+    managerId: 'dir-n2-7777-4a48-bed2-72b525325c81',
   },
 
   // 5. Manager N+1 (Services) -> Reporte au PDG

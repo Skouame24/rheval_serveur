@@ -171,7 +171,34 @@ async function resetDatabase() {
   });
   console.log(`   📋 Assistante RH : ${assistanteRh.nom} (${assistanteRh.email}) - Manager N+1: DRH (${drh.nom})`);
 
-  // D. Managers N+1 sous le PDG
+  // D. Directeur N+2 (Technique & Opérations) -> Reporte au PDG
+  const directeurN2 = await prisma.utilisateurs_cache.upsert({
+    where: { id_microsoft: 'dir-n2-7777-4a48-bed2-72b525325c81' },
+    update: {
+      nom: 'Marc KOFFI',
+      email: 'directeur.n2@agilly.net',
+      poste: 'Directeur Technique & Opérations',
+      departement: 'Technique & Digital',
+      role: 'N2',
+      isCodir: true,
+      managerId: pdg.id_microsoft,
+      updatedAt: new Date(),
+    },
+    create: {
+      id_microsoft: 'dir-n2-7777-4a48-bed2-72b525325c81',
+      nom: 'Marc KOFFI',
+      email: 'directeur.n2@agilly.net',
+      poste: 'Directeur Technique & Opérations',
+      departement: 'Technique & Digital',
+      role: 'N2',
+      isCodir: true,
+      managerId: pdg.id_microsoft,
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`   👔 Directeur N+2 : ${directeurN2.nom} (${directeurN2.email}) - N+1: PDG (${pdg.nom})`);
+
+  // E. Managers N+1
   const n1Managers = [
     {
       id_microsoft: 'abe87afa-a80b-4a48-bed2-72b525325c81',
@@ -180,7 +207,7 @@ async function resetDatabase() {
       poste: 'Responsable Technique Digital',
       departement: 'Technique & Digital',
       role: 'N1',
-      managerId: pdg.id_microsoft,
+      managerId: directeurN2.id_microsoft,
     },
     {
       id_microsoft: '4f1e0426-b3f2-446b-9279-d830964cc8c8',
@@ -256,8 +283,8 @@ async function resetDatabase() {
   // 4. Création des fiches d'évaluation initiales prêtes pour les tests
   console.log('\n4️⃣  Génération des fiches d\'évaluation initiales (Statut : FIXATION_OBJECTIFS)...');
 
-  // Fiches pour : Collaborateur, Assistante RH, DRH, et Managers N+1
-  const evaluatedUsers = [salarie, assistanteRh, drh, ...n1Managers];
+  // Fiches pour : Collaborateur, Assistante RH, DRH, Directeur N2, et Managers N+1
+  const evaluatedUsers = [salarie, assistanteRh, drh, directeurN2, ...n1Managers];
 
   for (const user of evaluatedUsers) {
     const ficheId = 'fic-' + user.id_microsoft.substring(0, 8) + '-2026';
