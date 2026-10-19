@@ -14,13 +14,19 @@ export class EmployeesController {
   }
 
   @Get('employees/n2-subordinates')
-  async getN2Subordinates(@Headers('x-user-id') n2Id?: string) {
-    return this.employeesService.getN2Subordinates(n2Id);
+  async getN2Subordinates(
+    @Headers('x-user-id') n2Id?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.employeesService.getN2Subordinates(n2Id, userEmail);
   }
 
   @Get('n1/collaborateurs')
-  async getMyTeam(@Headers('x-user-id') managerId?: string) {
-    return this.employeesService.getMyTeam(managerId);
+  async getMyTeam(
+    @Headers('x-user-id') managerId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.employeesService.getMyTeam(managerId, userEmail);
   }
 
   @Get('employees/:id')

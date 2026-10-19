@@ -42,7 +42,15 @@ export class EvaluationsService {
 
   async getMyCurrent(userId?: string, userEmail?: string) {
     let uId = userId;
-    if (!uId && userEmail) {
+    if (userId) {
+      const u = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: userId } });
+      if (!u && userEmail) {
+        const byEmail = await this.prisma.utilisateurs_cache.findFirst({
+          where: { email: { equals: userEmail, mode: 'insensitive' } },
+        });
+        uId = byEmail?.id_microsoft;
+      }
+    } else if (userEmail) {
       const user = await this.prisma.utilisateurs_cache.findFirst({
         where: { email: { equals: userEmail, mode: 'insensitive' } },
       });
@@ -81,7 +89,15 @@ export class EvaluationsService {
 
   async getMyHistory(userId?: string, annee?: number, statut?: string, userEmail?: string) {
     let uId = userId;
-    if (!uId && userEmail) {
+    if (userId) {
+      const u = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: userId } });
+      if (!u && userEmail) {
+        const byEmail = await this.prisma.utilisateurs_cache.findFirst({
+          where: { email: { equals: userEmail, mode: 'insensitive' } },
+        });
+        uId = byEmail?.id_microsoft;
+      }
+    } else if (userEmail) {
       const user = await this.prisma.utilisateurs_cache.findFirst({
         where: { email: { equals: userEmail, mode: 'insensitive' } },
       });
@@ -931,25 +947,25 @@ export class EvaluationsService {
 
   async getN2TeamEvaluations(n2Id?: string, userEmail?: string) {
     await this.ensureFichesForActiveCycle();
-    let directorId = n2Id;
-    if (!directorId && userEmail) {
-      const dir = await this.prisma.utilisateurs_cache.findFirst({
+    let director = null;
+    if (n2Id) {
+      director = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: n2Id },
+      });
+    }
+    if (!director && userEmail) {
+      director = await this.prisma.utilisateurs_cache.findFirst({
         where: { email: { equals: userEmail, mode: 'insensitive' } },
       });
-      directorId = dir?.id_microsoft;
     }
-    if (!directorId) {
-      const dir = await this.prisma.utilisateurs_cache.findFirst({
+    if (!director) {
+      director = await this.prisma.utilisateurs_cache.findFirst({
         where: { role: 'N2' },
       });
-      directorId = dir?.id_microsoft;
     }
 
+    const directorId = director?.id_microsoft;
     if (!directorId) return [];
-
-    const director = await this.prisma.utilisateurs_cache.findUnique({
-      where: { id_microsoft: directorId },
-    });
 
     const posteLower = (director?.poste || '').toLowerCase();
     const isGeneralDirector =
@@ -1008,19 +1024,23 @@ export class EvaluationsService {
   }
 
   async getN1TeamEvaluations(managerId?: string, userEmail?: string) {
-    let mgrId = managerId;
-    if (!mgrId && userEmail) {
-      const mgr = await this.prisma.utilisateurs_cache.findFirst({
+    let mgr = null;
+    if (managerId) {
+      mgr = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: managerId },
+      });
+    }
+    if (!mgr && userEmail) {
+      mgr = await this.prisma.utilisateurs_cache.findFirst({
         where: { email: { equals: userEmail, mode: 'insensitive' } },
       });
-      mgrId = mgr?.id_microsoft;
     }
-    if (!mgrId) {
-      const mgr = await this.prisma.utilisateurs_cache.findFirst({
+    if (!mgr) {
+      mgr = await this.prisma.utilisateurs_cache.findFirst({
         where: { role: { in: ['N1', 'N2', 'DRH'] } },
       });
-      mgrId = mgr?.id_microsoft;
     }
+    const mgrId = mgr?.id_microsoft;
 
     let directSubordinateIds: string[] = [];
     if (mgrId) {

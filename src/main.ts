@@ -47,7 +47,7 @@ async function bootstrap() {
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
-    allowedHeaders: 'Content-Type, Accept, Authorization, x-user-id',
+    allowedHeaders: 'Content-Type, Accept, Authorization, x-user-id, x-user-email',
   });
 
   // Swagger Documentation OpenAPI

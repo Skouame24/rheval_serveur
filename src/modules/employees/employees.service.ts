@@ -71,22 +71,46 @@ export class EmployeesService {
     return { n1User, n2User };
   }
 
-  async getMyTeam(managerId?: string) {
-    if (!managerId) return [];
+  async getMyTeam(managerId?: string, userEmail?: string) {
+    let mgr = null;
+    if (managerId) {
+      mgr = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: managerId },
+      });
+    }
+    if (!mgr && userEmail) {
+      mgr = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+    }
+    const mgrId = mgr?.id_microsoft;
+    if (!mgrId) return [];
 
     const team = await this.prisma.utilisateurs_cache.findMany({
-      where: { managerId },
+      where: { managerId: mgrId },
     });
 
     return team.map((u) => mapUserToDto(u));
   }
 
-  async getN2Subordinates(n2Id?: string) {
-    if (!n2Id) return [];
+  async getN2Subordinates(n2Id?: string, userEmail?: string) {
+    let director = null;
+    if (n2Id) {
+      director = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: n2Id },
+      });
+    }
+    if (!director && userEmail) {
+      director = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+    }
+    const directorId = director?.id_microsoft;
+    if (!directorId) return [];
 
     // N-1 directs sous ce N-2
     const n1Team = await this.prisma.utilisateurs_cache.findMany({
-      where: { managerId: n2Id },
+      where: { managerId: directorId },
     });
     const n1Ids = n1Team.map((u) => u.id_microsoft);
 
@@ -94,7 +118,7 @@ export class EmployeesService {
     const allSubordinates = await this.prisma.utilisateurs_cache.findMany({
       where: {
         OR: [
-          { managerId: n2Id },
+          { managerId: directorId },
           { managerId: { in: n1Ids } },
         ],
       },
