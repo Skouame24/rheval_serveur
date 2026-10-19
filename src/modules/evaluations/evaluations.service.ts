@@ -270,7 +270,7 @@ export class EvaluationsService {
       });
     }
 
-    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'EVALUATION_N1');
+    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'VALIDATION_OBJECTIFS_SALARIE');
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: ficheId },
@@ -285,7 +285,7 @@ export class EvaluationsService {
         action: 'FIXATION_OBJECTIFS_SOUMISE',
         commentaire: nextStatut === 'VALIDATION_OBJECTIFS_N2'
           ? 'Objectifs fixés par le N+1 et soumis pour validation Direction N+2'
-          : 'Objectifs fixés par le N+1. Phase d\'évaluation et notation N+1 ouverte.',
+          : 'Objectifs fixés par le N+1 et transmis pour confirmation au salarié.',
         effectueParId: managerId || 'mgr-n1',
         ficheId: ficheId,
         dateAction: new Date(),
@@ -336,7 +336,7 @@ export class EvaluationsService {
     }
     if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
 
-    const nextStatut = dto.decision === 'APPROUVE' ? 'EVALUATION_N1' : 'FIXATION_OBJECTIFS';
+    const nextStatut = dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_SALARIE' : 'FIXATION_OBJECTIFS';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: existing.id },
@@ -353,7 +353,7 @@ export class EvaluationsService {
         id: 'hist-' + Date.now(),
         statutFiche: nextStatut,
         action: dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_N2_APPROUVE' : 'VALIDATION_OBJECTIFS_N2_REJETE',
-        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs approuvés par la Direction. Phase d\'évaluation et notation N+1 ouverte directement.' : 'Objectifs rejetés par la Direction, retour au N+1'),
+        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs approuvés par la Direction. En attente de confirmation par le salarié.' : 'Objectifs rejetés par la Direction, retour au N+1'),
         effectueParId: n2Id || 'mgr-n2',
         ficheId: existing.id,
         dateAction: new Date(),
@@ -366,8 +366,8 @@ export class EvaluationsService {
       this.notificationsService.createNotification({
         userId: existing.salarieId,
         titre: `Objectifs 2026 approuvés par la Direction`,
-        message: `La Direction a validé vos objectifs annuels 2026. L'évaluation et la notation par votre responsable sont désormais ouvertes.`,
-        type: 'INFO',
+        message: `La Direction a validé vos objectifs annuels 2026. Veuillez vous connecter dans votre espace pour confirmer la prise de connaissance de vos objectifs.`,
+        type: 'ACTION',
         lien: '/dashboard/mon-espace',
         ficheId: existing.id,
       });
@@ -375,8 +375,8 @@ export class EvaluationsService {
         this.notificationsService.createNotification({
           userId: n1.id_microsoft,
           titre: `Objectifs validés par la Direction : ${salarie?.nom || 'Collaborateur'}`,
-          message: `La Direction a validé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Vous pouvez désormais procéder à son évaluation et à sa notation.`,
-          type: 'ACTION',
+          message: `La Direction a validé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Le collaborateur doit à présent confirmer la prise de connaissance de ses objectifs.`,
+          type: 'INFO',
           lien: '/dashboard/mon-equipe/evaluations',
           ficheId: existing.id,
         });
