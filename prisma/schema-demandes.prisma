@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/prisma-demandes/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_DEMANDES_URL")
+}
+
+// ============================================================
+// BASE DÉDIÉE : MODULE ABSENCES, CONGÉS, PERMISSIONS & MISSIONS
+// 100% Autonome • Découplé • Bounded Context
+// ============================================================
+
+model types_demande {
+  id             String        @id @default(uuid())
+  code           String        @unique // CONGE_ANNUEL, PERMISSION_ABSENCE, REPOS_MALADIE, MISSION_DEPLACEMENT, INTERVENTION_TERRAIN
+  libelle        String
+  categorie      String        // CONGE, PERMISSION, MALADIE, MISSION, INTERVENTION
+  necessiteSolde Boolean       @default(true)
+  pieceRequise   Boolean       @default(false)
+  delaiMinJours  Int           @default(2) // Prévenance en jours
+  dureeMaxJours  Int?          // Plafond réglementaire
+  actif          Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  demandes       demandes_rh[]
+}
+
+model soldes_conges {
+  id             String   @id @default(uuid())
+  salarieId      String   // Identifiant Microsoft SSO / Matricule
+  annee          Int      // Ex: 2026
+  joursAcquis    Decimal  @default(0) @db.Decimal(5, 2)
+  joursPris      Decimal  @default(0) @db.Decimal(5, 2)
+  joursEnAttente Decimal  @default(0) @db.Decimal(5, 2) // Réservés (en cours de circuit)
+  reliquatN1     Decimal  @default(0) @db.Decimal(5, 2) // Report année précédente
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([salarieId, annee])
+}
+
+model demandes_rh {
+  id               String                   @id @default(uuid())
+  numeroDemande    String                   @unique // AGY-DEM-2026-00001
+  salarieId        String                   // Identifiant Microsoft SSO
+  salarieNom       String?                  // Nom complet
+  salarieEmail     String?
+  salariePoste     String?
+  salarieDirection String?
+  managerId        String?                  // N+1 identifiant
+  typeId           String
+  dateDebut        DateTime
+  dateFin          DateTime
+  demiJourneeDebut Boolean                  @default(false)
+  demiJourneeFin   Boolean                  @default(false)
+  nombreJours      Decimal                  @db.Decimal(4, 1)
+  motif            String
+  destination      String?                  // Pour Missions / Déplacements
+  moyenTransport   String?                  // Pour Missions
+  fraisEstimes     Decimal?                 @db.Decimal(10, 2)
+  statut           String                   @default("EN_ATTENTE_N1") // BROUILLON, SOUMISE, EN_ATTENTE_N1, EN_ATTENTE_DRH, EN_ATTENTE_DG, APPROUVEE, PERMISSION_EDITEE, ARCHIVEE, RETOURNEE_EMPLOYE, RETOURNEE_N1, RETOURNEE_DRH, REFUSEE, ANNULEE
+  etapeCourante    Int                      @default(1) // 1: N+1, 2: DRH, 3: DG, 4: GED
+  cycleRejetCount  Int                      @default(0)
+  documentUrl      String?
+  numeroTitre      String?                  @unique // AGY-PERM-2026-00001
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  typeDemande      types_demande            @relation(fields: [typeId], references: [id])
+  validations      validations_demande[]
+  piecesJointes    pieces_jointes_demande[]
+  historique       historique_demande[]
+}
+
+model validations_demande {
+  id           String      @id @default(uuid())
+  demandeId    String
+  etape        Int         // 1: N+1, 2: DRH, 3: DG
+  valideurId   String
+  valideurNom  String?
+  valideurRole String?
+  decision     String      // APPROUVE, REJETE, RETOURNE
+  motif        String?
+  dateDecision DateTime    @default(now())
+
+  demande      demandes_rh @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+}
+
+model pieces_jointes_demande {
+  id            String      @id @default(uuid())
+  demandeId     String
+  nomFichier    String
+  cheminFichier String
+  mimeType      String
+  tailleOctets  Int
+  createdAt     DateTime    @default(now())
+
+  demande       demandes_rh @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+}
+
+model historique_demande {
+  id              String      @id @default(uuid())
+  demandeId       String
+  auteurId        String
+  auteurNom       String?
+  action          String
+  statutPrecedent String?
+  nouveauStatut   String
+  commentaire     String?
+  adresseIp       String?
+  createdAt       DateTime    @default(now())
+
+  demande         demandes_rh @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+}
+

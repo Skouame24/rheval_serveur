@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// BASE D'ÉVALUATION & PERFORMANCE (RHEVAL ENTERPRISE)
+// ============================================================
+
 model bonus_commissions {
   id                String            @id
   montantCalcule    Decimal           @db.Decimal(10, 2)
@@ -178,4 +182,3 @@ model notifications {
 
   utilisateurs_cache utilisateurs_cache @relation(fields: [userId], references: [id_microsoft], onDelete: Cascade)
 }
-
