@@ -6,12 +6,17 @@ export class CyclesService {
   constructor(private prisma: PrismaService) {}
 
   async getAll() {
-    return this.prisma.cycles_evaluation.findMany({
+    const list = await this.prisma.cycles_evaluation.findMany({
       orderBy: { annee: 'desc' },
       include: {
         fiches_evaluation: true,
       },
     });
+    return list.map((c) => ({
+      ...c,
+      dateDebut: c.dateOuverture ? c.dateOuverture.toISOString().split('T')[0] : null,
+      dateFin: c.dateFermeture ? c.dateFermeture.toISOString().split('T')[0] : null,
+    }));
   }
 
   async getActif() {
@@ -22,7 +27,13 @@ export class CyclesService {
       },
     });
 
-    return cycle || null;
+    if (!cycle) return null;
+
+    return {
+      ...cycle,
+      dateDebut: cycle.dateOuverture ? cycle.dateOuverture.toISOString().split('T')[0] : null,
+      dateFin: cycle.dateFermeture ? cycle.dateFermeture.toISOString().split('T')[0] : null,
+    };
   }
 
   async create(data: {
@@ -30,6 +41,10 @@ export class CyclesService {
     libelle: string;
     dateDebut: string;
     dateFin: string;
+    dateDebutFixation?: string;
+    dateFinFixation?: string;
+    dateDebutEval?: string;
+    dateFinEval?: string;
     creeParUserId?: string;
   }) {
     // Vérifier si un cycle actif existe déjà
@@ -75,6 +90,10 @@ export class CyclesService {
         typeCycle: 'ANNUEL',
         dateOuverture: new Date(data.dateDebut),
         dateFermeture: new Date(data.dateFin),
+        dateDebutFixation: data.dateDebutFixation ? new Date(data.dateDebutFixation) : null,
+        dateFinFixation: data.dateFinFixation ? new Date(data.dateFinFixation) : null,
+        dateDebutEval: data.dateDebutEval ? new Date(data.dateDebutEval) : null,
+        dateFinEval: data.dateFinEval ? new Date(data.dateFinEval) : null,
         statut: 'ACTIF',
         creeParUserId: creatorId,
         updatedAt: new Date(),

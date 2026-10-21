@@ -17,7 +17,9 @@
     "prisma:reset": "prisma db push --force-reset",
     "prisma:studio": "prisma studio",
     "db:reset": "ts-node prisma/reset-db.ts",
-    "db:clear": "ts-node prisma/clear-all.ts"
+    "db:clear": "ts-node prisma/clear-all.ts",
+    "db:seed": "ts-node prisma/seed-parcours.ts",
+    "seed": "ts-node prisma/seed-parcours.ts"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^3.0.2",
