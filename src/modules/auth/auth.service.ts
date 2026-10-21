@@ -43,7 +43,7 @@ export class AuthService {
           ...(data.poste ? { poste: data.poste } : {}),
           ...(data.departement ? { departement: data.departement } : {}),
           ...(data.telephone ? { telephone: data.telephone } : {}),
-          ...(data.role ? { role: data.role } : {}),
+          ...(user.role ? {} : data.role ? { role: data.role } : {}),
           ...(data.managerId ? { managerId: data.managerId } : {}),
           updatedAt: new Date(),
         },
@@ -77,10 +77,14 @@ export class AuthService {
       }
     }
 
+    const drhUser = await this.prisma.utilisateurs_cache.findFirst({
+      where: { role: 'DRH' },
+    });
+
     return {
       success: true,
       message: 'Session synchronisée avec succès',
-      user: mapUserToDto(user, n1User, n2User),
+      user: mapUserToDto(user, n1User, n2User, drhUser),
     };
   }
 
@@ -111,18 +115,28 @@ export class AuthService {
     }
 
     let n1User = null;
+    let n2User = null;
     if (user.managerId) {
       n1User = await this.prisma.utilisateurs_cache.findUnique({
         where: { id_microsoft: user.managerId },
       });
+      if (n1User?.managerId) {
+        n2User = await this.prisma.utilisateurs_cache.findUnique({
+          where: { id_microsoft: n1User.managerId },
+        });
+      }
     }
+
+    const drhUser = await this.prisma.utilisateurs_cache.findFirst({
+      where: { role: 'DRH' },
+    });
 
     const payload = { sub: user.id_microsoft, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload);
 
     return {
       access_token: token,
-      user: mapUserToDto(user, n1User),
+      user: mapUserToDto(user, n1User, n2User, drhUser),
     };
   }
 

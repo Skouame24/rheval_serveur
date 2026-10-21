@@ -24,13 +24,13 @@ export class EmployeesService {
       throw new NotFoundException('Utilisateur non synchronisé en base de données');
     }
 
-    const { n1User, n2User } = await this.resolveHierarchy(user);
+    const { n1User, n2User, drhUser } = await this.resolveHierarchy(user);
 
     const teamCount = await this.prisma.utilisateurs_cache.count({
       where: { managerId: user.id_microsoft },
     });
 
-    const dto = mapUserToDto(user, n1User, n2User);
+    const dto = mapUserToDto(user, n1User, n2User, drhUser);
     return {
       ...dto,
       hasTeam: teamCount > 0,
@@ -47,12 +47,12 @@ export class EmployeesService {
       throw new NotFoundException(`Utilisateur ${id} introuvable`);
     }
 
-    const { n1User, n2User } = await this.resolveHierarchy(user);
+    const { n1User, n2User, drhUser } = await this.resolveHierarchy(user);
 
-    return mapUserToDto(user, n1User, n2User);
+    return mapUserToDto(user, n1User, n2User, drhUser);
   }
 
-  private async resolveHierarchy(user: any): Promise<{ n1User: any; n2User: any }> {
+  private async resolveHierarchy(user: any): Promise<{ n1User: any; n2User: any; drhUser: any }> {
     let n1User = null;
     let n2User = null;
 
@@ -68,7 +68,11 @@ export class EmployeesService {
       }
     }
 
-    return { n1User, n2User };
+    const drhUser = await this.prisma.utilisateurs_cache.findFirst({
+      where: { role: 'DRH' },
+    });
+
+    return { n1User, n2User, drhUser };
   }
 
   async getMyTeam(managerId?: string, userEmail?: string) {

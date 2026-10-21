@@ -1,4 +1,4 @@
-export function mapUserToDto(u: any, n1User?: any, n2User?: any) {
+export function mapUserToDto(u: any, n1User?: any, n2User?: any, drhUser?: any) {
   if (!u) return null;
 
   const parts = (u.nom || '').trim().split(' ');
@@ -39,6 +39,19 @@ export function mapUserToDto(u: any, n1User?: any, n2User?: any) {
             email: n2User.email,
             role: n2User.role || 'N2',
             poste: n2User.poste || 'Directeur N+2',
+          };
+        })()
+      : undefined,
+    drh: drhUser
+      ? (() => {
+          const p = (drhUser.nom || '').trim().split(' ');
+          return {
+            id: drhUser.id_microsoft,
+            nom: p.length > 1 ? p.slice(-1).join(' ') : drhUser.nom,
+            prenom: p.length > 1 ? p.slice(0, -1).join(' ') : '',
+            email: drhUser.email,
+            role: drhUser.role || 'DRH',
+            poste: drhUser.poste || 'Directrice des Ressources Humaines',
           };
         })()
       : undefined,
