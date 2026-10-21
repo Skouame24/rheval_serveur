@@ -1,5 +1,5 @@
 import { PrismaClient as PrismaEvalClient } from "@prisma/client";
-import { PrismaClient as PrismaDemandesClient } from "../src/prisma-demandes/client";
+import { PrismaClient as PrismaDemandesClient } from "@prisma-demandes/client";
 
 const prismaEval = new PrismaEvalClient();
 const prismaDemandes = new PrismaDemandesClient();
