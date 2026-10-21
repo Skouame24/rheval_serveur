@@ -44,7 +44,7 @@ export class AuthService {
           ...(data.departement ? { departement: data.departement } : {}),
           ...(data.telephone ? { telephone: data.telephone } : {}),
           ...(user.role ? {} : data.role ? { role: data.role } : {}),
-          ...(data.managerId ? { managerId: data.managerId } : {}),
+          ...(user.managerId ? {} : data.managerId ? { managerId: data.managerId } : {}),
           updatedAt: new Date(),
         },
       });

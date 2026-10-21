@@ -229,16 +229,10 @@ export class ObjectivesService {
       }
     }
 
-    // Déterminer le statut suivant : Si N+2 existe -> VALIDATION_OBJECTIFS_N2, sinon -> VALIDATION_OBJECTIFS_SALARIE
+    // Déterminer le statut suivant : Étape 1 du workflow -> toujours VALIDATION_OBJECTIFS_RH (revue et visa DRH)
     let nextStatut = fiche.statut;
     if (fiche.statut === 'FIXATION_OBJECTIFS') {
-      const salarie = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: fiche.salarieId } });
-      let hasN2 = false;
-      if (salarie?.managerId) {
-        const n1 = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarie.managerId } });
-        if (n1?.managerId) hasN2 = true;
-      }
-      nextStatut = hasN2 ? 'VALIDATION_OBJECTIFS_N2' : 'EVALUATION_N1';
+      nextStatut = 'VALIDATION_OBJECTIFS_RH';
     }
 
     await this.prisma.fiches_evaluation.update({
@@ -254,9 +248,9 @@ export class ObjectivesService {
       data: {
         id: 'hist-' + Date.now(),
         ficheId: fiche.id,
-        action: 'OBJECTIFS_FIXES',
+        action: 'FIXATION_OBJECTIFS_SOUMISE',
         statutFiche: nextStatut,
-        commentaire: `${data.objectifs.length} objectif(s) de performance fixé(s) et transmis au collaborateur.`,
+        commentaire: `${data.objectifs.length} objectif(s) de performance fixé(s) par le manager et transmis à la Direction RH pour validation.`,
         effectueParId: 'mgr-n1',
         dateAction: new Date(),
       },
