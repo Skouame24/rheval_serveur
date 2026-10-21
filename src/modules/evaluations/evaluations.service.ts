@@ -270,7 +270,8 @@ export class EvaluationsService {
       });
     }
 
-    const nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'VALIDATION_OBJECTIFS_SALARIE');
+    // Étape 1 du workflow : Fixation par le N+1 -> Direction vers validation RH
+    const nextStatut = 'VALIDATION_OBJECTIFS_RH';
 
     const updated = await this.prisma.fiches_evaluation.update({
       where: { id: ficheId },
@@ -283,43 +284,115 @@ export class EvaluationsService {
         id: 'hist-' + Date.now(),
         statutFiche: nextStatut,
         action: 'FIXATION_OBJECTIFS_SOUMISE',
-        commentaire: nextStatut === 'VALIDATION_OBJECTIFS_N2'
-          ? 'Objectifs fixés par le N+1 et soumis pour validation Direction N+2'
-          : 'Objectifs fixés par le N+1 et transmis pour confirmation au salarié.',
+        commentaire: 'Objectifs fixés par le N+1 et transmis pour validation RH.',
         effectueParId: managerId || 'mgr-n1',
         ficheId: ficheId,
         dateAction: new Date(),
       },
     });
 
-    // Notifications automatiques
-    const { salarie, n1, n2 } = await this.getHierarchyActors(existing.salarieId);
-    if (nextStatut === 'VALIDATION_OBJECTIFS_N2' && n2) {
+    // Notifications aux acteurs
+    const { salarie, n1 } = await this.getHierarchyActors(existing.salarieId);
+    const rhUsers = await this.prisma.utilisateurs_cache.findMany({
+      where: { role: { in: ['RH', 'DRH'] } },
+    });
+    for (const rh of rhUsers) {
       this.notificationsService.createNotification({
-        userId: n2.id_microsoft,
-        titre: `Validation Objectifs requise : ${salarie?.nom || 'Collaborateur'}`,
-        message: `Le manager ${n1?.nom || 'N+1'} a rédigé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Votre validation de Direction est requise.`,
+        userId: rh.id_microsoft,
+        titre: `Validation Objectifs requise (RH) : ${salarie?.nom || 'Collaborateur'}`,
+        message: `Le manager ${n1?.nom || 'N+1'} a fixé les objectifs de ${salarie?.nom || 'votre collaborateur'}. Votre validation RH est requise.`,
         type: 'VALIDATION',
-        lien: '/dashboard/mon-equipe/evaluations',
+        lien: '/dashboard/pilotage-rh',
         ficheId,
       });
-      this.notificationsService.createNotification({
-        userId: existing.salarieId,
-        titre: `Objectifs 2026 transmis pour validation`,
-        message: `Votre manager ${n1?.nom || 'N+1'} a défini vos objectifs annuels. Ils sont actuellement soumis à la Direction pour approbation.`,
-        type: 'INFO',
-        lien: '/dashboard/mon-espace',
-        ficheId,
-      });
+    }
+    this.notificationsService.createNotification({
+      userId: existing.salarieId,
+      titre: `Objectifs 2026 fixés par votre manager`,
+      message: `Votre manager ${n1?.nom || 'N+1'} a défini vos objectifs. Ils ont été transmis aux RH pour validation.`,
+      type: 'INFO',
+      lien: '/dashboard/mon-espace',
+      ficheId,
+    });
+
+    return mapFicheToDto(updated);
+  }
+
+  /**
+   * Étape 2 du workflow : Validation des objectifs par les RH
+   * Si approuvé -> transmis au N+2 (ou salarié si aucun N+2)
+   * Si rejeté -> retour au N+1
+   */
+  async validateObjectifsRh(
+    id: string,
+    dto: { decision: 'APPROUVE' | 'REJETE'; observations?: string },
+    rhId?: string,
+  ) {
+    let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
+    if (!existing) {
+      existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
+    }
+    if (!existing) throw new NotFoundException(`Fiche ${id} introuvable`);
+
+    let nextStatut = 'FIXATION_OBJECTIFS';
+    if (dto.decision === 'APPROUVE') {
+      nextStatut = await this.getNextStatusForN2(existing.salarieId, 'VALIDATION_OBJECTIFS_N2', 'VALIDATION_OBJECTIFS_SALARIE');
+    }
+
+    const updated = await this.prisma.fiches_evaluation.update({
+      where: { id: existing.id },
+      data: {
+        statut: nextStatut,
+        observation: dto.observations || existing.observation,
+        updatedAt: new Date(),
+      },
+      include: FICHE_INCLUDE,
+    });
+
+    await this.prisma.historique_evaluation.create({
+      data: {
+        id: 'hist-' + Date.now(),
+        statutFiche: nextStatut,
+        action: dto.decision === 'APPROUVE' ? 'VALIDATION_OBJECTIFS_RH_APPROUVE' : 'VALIDATION_OBJECTIFS_RH_REJETE',
+        commentaire: dto.observations || (dto.decision === 'APPROUVE' ? 'Objectifs validés par les RH. Transmis au N+2.' : 'Objectifs rejetés par les RH, retour au manager N+1.'),
+        effectueParId: rhId || 'drh',
+        ficheId: existing.id,
+        dateAction: new Date(),
+      },
+    });
+
+    const { salarie, n1, n2 } = await this.getHierarchyActors(existing.salarieId);
+    if (dto.decision === 'APPROUVE') {
+      if (nextStatut === 'VALIDATION_OBJECTIFS_N2' && n2) {
+        this.notificationsService.createNotification({
+          userId: n2.id_microsoft,
+          titre: `Validation Objectifs requise (Direction N+2) : ${salarie?.nom || 'Collaborateur'}`,
+          message: `Les objectifs de ${salarie?.nom || 'votre collaborateur'} ont été validés par les RH. Votre validation de Direction N+2 est requise.`,
+          type: 'VALIDATION',
+          lien: '/dashboard/mon-equipe/evaluations',
+          ficheId: existing.id,
+        });
+      } else {
+        this.notificationsService.createNotification({
+          userId: existing.salarieId,
+          titre: `Objectifs validés par les RH`,
+          message: `Vos objectifs ont été validés par les RH. Veuillez vous connecter pour confirmer votre accord.`,
+          type: 'ACTION',
+          lien: '/dashboard/mon-espace',
+          ficheId: existing.id,
+        });
+      }
     } else {
-      this.notificationsService.createNotification({
-        userId: existing.salarieId,
-        titre: `Objectifs 2026 prêts pour confirmation`,
-        message: `Votre manager ${n1?.nom || 'N+1'} a fixé vos objectifs. Veuillez vous connecter pour les consulter et donner votre accord.`,
-        type: 'ACTION',
-        lien: '/dashboard/mon-espace',
-        ficheId,
-      });
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Objectifs à réviser (Retour RH) : ${salarie?.nom || 'Collaborateur'}`,
+          message: `Les RH ont demandé une révision des objectifs de ${salarie?.nom || 'votre collaborateur'} : "${dto.observations || 'À corriger'}".`,
+          type: 'ALERTE',
+          lien: '/dashboard/mon-equipe',
+          ficheId: existing.id,
+        });
+      }
     }
 
     return mapFicheToDto(updated);
@@ -328,7 +401,7 @@ export class EvaluationsService {
   async validateObjectifsN2(
     id: string,
     dto: { decision: 'APPROUVE' | 'REJETE'; observations?: string },
-    n2Id?: string
+    n2Id?: string,
   ) {
     let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
     if (!existing) {
@@ -691,31 +764,7 @@ export class EvaluationsService {
     },
     n2Id?: string,
   ) {
-    if (dto.notes && dto.notes.length > 0) {
-      const examinateurId = n2Id || 'drh-id-1234';
-      for (const item of dto.notes) {
-        await this.prisma.evaluations.upsert({
-          where: {
-            examinateurId_objectifId: {
-              examinateurId,
-              objectifId: item.objectifId,
-            },
-          },
-          update: {
-            note: item.note,
-            observation: item.commentaire,
-            updatedAt: new Date(),
-          },
-          create: {
-            examinateurId,
-            objectifId: item.objectifId,
-            note: item.note,
-            observation: item.commentaire,
-            updatedAt: new Date(),
-          },
-        });
-      }
-    }
+    // Le manager N+1 seul évalue. Le N+2 examine et valide ou rejette sans saisir de notes alternatives.
     return this.validateNotesN2(
       id,
       {

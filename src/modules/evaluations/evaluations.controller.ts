@@ -89,6 +89,15 @@ export class EvaluationsController {
     return this.evaluationsService.submitObjectifsN1(id, body, managerId);
   }
 
+  @Put('rh/evaluations/:id/objectifs')
+  async validateObjectifsRh(
+    @Param('id') id: string,
+    @Body() body: { decision: 'APPROUVE' | 'REJETE'; observations?: string },
+    @Headers('x-user-id') rhId?: string,
+  ) {
+    return this.evaluationsService.validateObjectifsRh(id, body, rhId);
+  }
+
   @Put('n2/evaluations/:id/objectifs')
   async validateObjectifsN2(
     @Param('id') id: string,
