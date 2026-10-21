@@ -18,6 +18,7 @@
     "prisma:studio": "prisma studio",
     "db:reset": "ts-node prisma/reset-db.ts",
     "db:clear": "ts-node prisma/clear-all.ts",
+    "db:reset-actions": "ts-node prisma/reset-actions.ts",
     "db:seed": "ts-node prisma/seed-parcours.ts",
     "seed": "ts-node prisma/seed-parcours.ts"
   },
