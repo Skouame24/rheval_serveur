@@ -99,7 +99,7 @@ export class DemandesService {
     // 5. Contrôle et réservation du solde de congés si applicable
     if (typeDemande.necessiteSolde) {
       const annee = dDebut.getFullYear();
-      await this.soldesService.reserverJours(salarieId, nombreJours, annee);
+      await this.soldesService.reserverJours(actualSalarieId, nombreJours, annee);
     }
 
     // 6. Numérotation unique séquentielle
