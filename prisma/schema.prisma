@@ -30,6 +30,8 @@ model competences {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime
   fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+
+  @@index([ficheId])
 }
 
 model cycles_evaluation {
@@ -92,6 +94,10 @@ model fiches_evaluation {
   objectifs             objectifs[]
   suggestions           suggestions[]
   formations            formations[]
+
+  @@index([salarieId])
+  @@index([cycleId])
+  @@index([statut])
 }
 
 model historique_evaluation {
@@ -126,6 +132,8 @@ model objectifs {
   evaluations       evaluations[]
   indicateurs       indicateurs[]
   fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+
+  @@index([ficheId])
 }
 
 model suggestions {
@@ -135,6 +143,8 @@ model suggestions {
   ficheId           String
   createdAt         DateTime          @default(now())
   fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+
+  @@index([ficheId])
 }
 
 model formations {
@@ -148,6 +158,8 @@ model formations {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   fiches_evaluation fiches_evaluation @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+
+  @@index([ficheId])
 }
 
 model utilisateurs_cache {
@@ -166,6 +178,9 @@ model utilisateurs_cache {
   cycles_evaluation cycles_evaluation[]
   fiches_evaluation fiches_evaluation[]
   notifications     notifications[]
+
+  @@index([managerId])
+  @@index([role])
 }
 
 model notifications {
@@ -181,4 +196,7 @@ model notifications {
   updatedAt  DateTime @updatedAt
 
   utilisateurs_cache utilisateurs_cache @relation(fields: [userId], references: [id_microsoft], onDelete: Cascade)
+
+  @@index([userId, lu])
+  @@index([createdAt])
 }

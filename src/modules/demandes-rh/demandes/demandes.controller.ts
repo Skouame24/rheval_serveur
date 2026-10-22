@@ -26,6 +26,11 @@ export class DemandesController {
     return this.demandesService.getMesDemandes(salarieId);
   }
 
+  @Get()
+  async getAllDemandes() {
+    return this.demandesService.getAllDemandes();
+  }
+
   @Get(":id")
   async getDemandeById(@Param("id") id: string) {
     return this.demandesService.getDemandeById(id);

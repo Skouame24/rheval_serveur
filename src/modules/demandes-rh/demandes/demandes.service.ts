@@ -171,6 +171,21 @@ export class DemandesService {
     });
   }
 
+  async getAllDemandes() {
+    return this.prismaDemandes.demandes_rh.findMany({
+      include: {
+        typeDemande: true,
+        validations: {
+          orderBy: { dateDecision: "asc" },
+        },
+        historique: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   async getDemandeById(id: string) {
     const demande = await this.prismaDemandes.demandes_rh.findUnique({
       where: { id },

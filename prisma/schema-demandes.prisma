@@ -39,6 +39,7 @@ model soldes_conges {
   updatedAt      DateTime @updatedAt
 
   @@unique([salarieId, annee])
+  @@index([salarieId])
 }
 
 model demandes_rh {
@@ -72,6 +73,11 @@ model demandes_rh {
   validations      validations_demande[]
   piecesJointes    pieces_jointes_demande[]
   historique       historique_demande[]
+
+  @@index([salarieId])
+  @@index([managerId])
+  @@index([statut])
+  @@index([typeId])
 }
 
 model validations_demande {
@@ -86,6 +92,9 @@ model validations_demande {
   dateDecision DateTime    @default(now())
 
   demande      demandes_rh @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+
+  @@index([demandeId])
+  @@index([valideurId])
 }
 
 model pieces_jointes_demande {
