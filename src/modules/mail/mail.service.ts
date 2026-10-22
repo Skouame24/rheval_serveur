@@ -94,30 +94,56 @@ export class MailService {
 </html>
     `;
 
-    // 1. Tenter Microsoft Graph si configuré
+    // 1. Tenter Brevo SMTP en priorité absolue si configuré
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        const fromAddress = process.env.SMTP_FROM || process.env.MAIL_FROM || '"Agilly RH" <b68c1a001@smtp-brevo.com>';
+        await this.mailerService.sendMail({
+          to,
+          from: fromAddress,
+          subject: `[Agilly RHEVAL] ${titre}`,
+          html: htmlContent,
+        });
+        this.logger.log(`[MailService/Brevo-SMTP] ✉️ E-mail envoyé avec succès via Brevo SMTP à : ${to}`);
+        return;
+      } catch (err: any) {
+        this.logger.error(`[MailService/Brevo-SMTP] Erreur d'envoi Brevo SMTP à ${to}: ${err?.message || err}`);
+      }
+    }
+
+    // 2. Tenter Microsoft Graph en fallback si configuré
     const graphSent = await this.trySendViaGraph(to, titre, htmlContent);
     if (graphSent) {
       this.logger.log(`[MailService/Graph] ✉️ E-mail envoyé avec succès via Microsoft Graph à : ${to}`);
       return;
     }
 
-    // 2. Tenter SMTP Mailer si identifiants configurés
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-      try {
-        await this.mailerService.sendMail({
-          to,
-          subject: `[Agilly RHEVAL] ${titre}`,
-          html: htmlContent,
-        });
-        this.logger.log(`[MailService/SMTP] ✉️ E-mail envoyé via SMTP à : ${to}`);
-        return;
-      } catch (err: any) {
-        this.logger.error(`[MailService/SMTP] Erreur d'envoi SMTP à ${to}: ${err?.message || err}`);
-      }
-    }
-
     // 3. Mode développement / Log propre
     this.logger.log(`[MailService/Log] ✉️ Notification e-mail enregistrée pour ${to} : "${titre}"`);
+  }
+
+  /**
+   * Vérifie la connexion SMTP Brevo
+   */
+  async verifySmtp(): Promise<{ ok: boolean; message: string; details?: any }> {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return { ok: false, message: 'SMTP_USER ou SMTP_PASS manquant dans .env' };
+    }
+
+    try {
+      const transporter = (this.mailerService as any).transporter;
+      if (transporter && typeof transporter.verify === 'function') {
+        await transporter.verify();
+        return { ok: true, message: 'Connexion SMTP Brevo opérationnelle' };
+      }
+      return { ok: true, message: 'Mailer initialisé' };
+    } catch (err: any) {
+      return {
+        ok: false,
+        message: err?.message || 'Erreur lors de la vérification SMTP',
+        details: err?.response || err?.code || err,
+      };
+    }
   }
 
   /**

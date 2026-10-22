@@ -45,22 +45,46 @@ export class NotificationsService {
 
       this.logger.log(`[NotificationsService] 🔔 Notification In-App créée (#${notif.id}) pour l'utilisateur ${dto.userId} : "${dto.titre}"`);
 
-      // 2. Envoi E-mail asynchrone (non-bloquant)
+      // 2. Envoi E-mail asynchrone (non-bloquant) via Brevo SMTP
       if (dto.sendEmail !== false) {
-        this.prisma.utilisateurs_cache.findUnique({
-          where: { id_microsoft: dto.userId },
-        }).then((user) => {
-          if (user?.email) {
-            this.mailService.sendNotificationEmail(
-              user.email,
+        (async () => {
+          let recipientEmail: string | null = null;
+          let recipientNom: string | undefined = undefined;
+
+          if (dto.userId.includes('@')) {
+            recipientEmail = dto.userId;
+            const u = await this.prisma.utilisateurs_cache.findFirst({
+              where: { email: { equals: dto.userId, mode: 'insensitive' } },
+            });
+            if (u?.nom) recipientNom = u.nom;
+          } else {
+            const u = await this.prisma.utilisateurs_cache.findFirst({
+              where: {
+                OR: [
+                  { id_microsoft: dto.userId },
+                  { matricule: dto.userId },
+                ],
+              },
+            });
+            if (u?.email) {
+              recipientEmail = u.email;
+              recipientNom = u.nom;
+            }
+          }
+
+          if (recipientEmail) {
+            await this.mailService.sendNotificationEmail(
+              recipientEmail,
               dto.titre,
               dto.message,
               dto.lien,
-              user.nom,
+              recipientNom,
             );
+          } else {
+            this.logger.warn(`[NotificationsService] Aucun e-mail trouvé pour l'identifiant utilisateur "${dto.userId}"`);
           }
-        }).catch((err) => {
-          this.logger.warn(`[NotificationsService] Erreur lors de la récupération de l'email utilisateur: ${err?.message || err}`);
+        })().catch((err) => {
+          this.logger.warn(`[NotificationsService] Erreur lors du déclenchement de l'e-mail: ${err?.message || err}`);
         });
       }
 
