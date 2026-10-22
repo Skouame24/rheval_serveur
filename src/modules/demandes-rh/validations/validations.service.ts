@@ -358,9 +358,24 @@ export class ValidationsService {
 
   // ── LISTES POUR CHAQUE ACTEUR ───────────────────────────────
   async getDemandesAValiderN1(managerId: string) {
+    const mgr = await this.prismaShared.utilisateurs_cache.findFirst({
+      where: {
+        OR: [
+          { id_microsoft: managerId },
+          { email: managerId },
+        ],
+      },
+    });
+
+    const mgrIds = [managerId];
+    if (mgr) {
+      if (mgr.id_microsoft && !mgrIds.includes(mgr.id_microsoft)) mgrIds.push(mgr.id_microsoft);
+      if (mgr.email && !mgrIds.includes(mgr.email)) mgrIds.push(mgr.email);
+    }
+
     return this.prismaDemandes.demandes_rh.findMany({
       where: {
-        managerId,
+        managerId: { in: mgrIds },
         statut: { in: [StatutDemandeRH.EN_ATTENTE_N1, StatutDemandeRH.RETOURNEE_N1] },
       },
       include: {

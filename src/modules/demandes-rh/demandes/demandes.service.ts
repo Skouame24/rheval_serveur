@@ -56,10 +56,16 @@ export class DemandesService {
     }
 
     // 1. Informations collaborateur depuis l'annuaire partagé
-    const salarie = await this.prismaShared.utilisateurs_cache.findUnique({
-      where: { id_microsoft: salarieId },
+    const salarie = await this.prismaShared.utilisateurs_cache.findFirst({
+      where: {
+        OR: [
+          { id_microsoft: salarieId },
+          { email: salarieId },
+        ],
+      },
     });
 
+    const actualSalarieId = salarie ? salarie.id_microsoft : salarieId;
     const nomComplet = salarie ? salarie.nom : "Collaborateur";
     const email = salarie ? salarie.email : null;
     const poste = salarie ? salarie.poste : null;
@@ -103,7 +109,7 @@ export class DemandesService {
     const demande = await this.prismaDemandes.demandes_rh.create({
       data: {
         numeroDemande,
-        salarieId,
+        salarieId: actualSalarieId,
         salarieNom: nomComplet,
         salarieEmail: email,
         salariePoste: poste,
@@ -156,8 +162,28 @@ export class DemandesService {
   }
 
   async getMesDemandes(salarieId: string) {
+    const salarie = await this.prismaShared.utilisateurs_cache.findFirst({
+      where: {
+        OR: [
+          { id_microsoft: salarieId },
+          { email: salarieId },
+        ],
+      },
+    });
+
+    const ids = [salarieId];
+    if (salarie) {
+      if (salarie.id_microsoft && !ids.includes(salarie.id_microsoft)) ids.push(salarie.id_microsoft);
+      if (salarie.email && !ids.includes(salarie.email)) ids.push(salarie.email);
+    }
+
     return this.prismaDemandes.demandes_rh.findMany({
-      where: { salarieId },
+      where: {
+        OR: [
+          { salarieId: { in: ids } },
+          ...(salarie?.email ? [{ salarieEmail: salarie.email }] : []),
+        ],
+      },
       include: {
         typeDemande: true,
         validations: {
