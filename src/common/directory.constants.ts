@@ -92,7 +92,18 @@ export const KNOWN_AGILLY_DIRECTORY: Record<string, DirectoryUser> = {
     managerId: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a',
   },
 
-  // 7. Salarié / Collaborateur -> Reporte à Sevan AKOUMIA
+  // 5. Manager N+1 (Directeur Juridique & Conformité) -> Reporte à David Martial AKPA (N2)
+  '1f77edad-716c-4552-b96f-58ec7d1ee1d7': {
+    id_microsoft: '1f77edad-716c-4552-b96f-58ec7d1ee1d7',
+    nom: 'Ange-Dieudonne TIANGBO',
+    email: 'ange.tiangbo@agilly.net',
+    poste: 'Directeur Juridique & Conformité / DPO',
+    departement: 'Direction Juridique/COVERPOINT',
+    role: 'N1',
+    managerId: 'aaf364d4-b002-4ae1-943d-d7ab5ec90a9a',
+  },
+
+  // 6. Salarié / Collaborateur -> Reporte à Ange-Dieudonne TIANGBO
   '0a5c4c64-abdd-4f4f-a3af-00057ebdddfb': {
     id_microsoft: '0a5c4c64-abdd-4f4f-a3af-00057ebdddfb',
     nom: 'Ebenezer Samuel KOUAME',
@@ -100,6 +111,6 @@ export const KNOWN_AGILLY_DIRECTORY: Record<string, DirectoryUser> = {
     poste: 'Développeur Fullstack',
     departement: 'Technique & Digital',
     role: 'SALARIE',
-    managerId: 'abe87afa-a80b-4a48-bed2-72b525325c81',
+    managerId: '1f77edad-716c-4552-b96f-58ec7d1ee1d7',
   },
 };
