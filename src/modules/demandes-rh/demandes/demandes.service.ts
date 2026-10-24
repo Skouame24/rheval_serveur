@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from "@nes
 import { PrismaDemandesService } from "../../../prisma-demandes/prisma-demandes.service";
 import { PrismaService } from "../../../prisma/prisma.service";
 import { CreateDemandeDto } from "./dto/create-demande.dto";
+import { UpdateTypeWorkflowDto } from "./dto/update-type-workflow.dto";
 import { StatutDemandeRH } from "../constants/statuts-demande.constant";
 import { calculerNombreJoursOuvres } from "../utils/date-calcul.util";
 import { SoldesService } from "../soldes/soldes.service";
@@ -24,6 +25,33 @@ export class DemandesService {
     return this.prismaDemandes.types_demande.findMany({
       where: { actif: true },
       orderBy: { categorie: "asc" },
+    });
+  }
+
+  async updateTypeWorkflow(idOrCode: string, dto: UpdateTypeWorkflowDto) {
+    const existing = await this.prismaDemandes.types_demande.findFirst({
+      where: {
+        OR: [{ id: idOrCode }, { code: idOrCode }],
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Type de demande '${idOrCode}' introuvable.`);
+    }
+
+    return this.prismaDemandes.types_demande.update({
+      where: { id: existing.id },
+      data: {
+        ...(dto.workflowN1 !== undefined && { workflowN1: dto.workflowN1 }),
+        ...(dto.workflowDrh !== undefined && { workflowDrh: dto.workflowDrh }),
+        ...(dto.workflowDg !== undefined && { workflowDg: dto.workflowDg }),
+        ...(dto.seuilDgJours !== undefined && { seuilDgJours: dto.seuilDgJours }),
+        ...(dto.pieceRequise !== undefined && { pieceRequise: dto.pieceRequise }),
+        ...(dto.delaiMinJours !== undefined && { delaiMinJours: dto.delaiMinJours }),
+        ...(dto.dureeMaxJours !== undefined && { dureeMaxJours: dto.dureeMaxJours }),
+        ...(dto.libelle !== undefined && { libelle: dto.libelle }),
+        ...(dto.description !== undefined && { description: dto.description }),
+      },
     });
   }
 
@@ -105,6 +133,23 @@ export class DemandesService {
     // 6. Numérotation unique séquentielle
     const numeroDemande = await this.documentsService.genererNumeroDemande(dDebut.getFullYear());
 
+    // 6b. Étape initiale selon configuration du workflow du type de demande
+    let statutInitial = StatutDemandeRH.EN_ATTENTE_N1;
+    let etapeInitiale = 1;
+
+    if (!typeDemande.workflowN1) {
+      if (typeDemande.workflowDrh) {
+        statutInitial = StatutDemandeRH.EN_ATTENTE_DRH;
+        etapeInitiale = 2;
+      } else if (typeDemande.workflowDg) {
+        statutInitial = StatutDemandeRH.EN_ATTENTE_DG;
+        etapeInitiale = 3;
+      } else {
+        statutInitial = StatutDemandeRH.APPROUVEE;
+        etapeInitiale = 4;
+      }
+    }
+
     // 7. Enregistrement dans la base Demandes RH
     const demande = await this.prismaDemandes.demandes_rh.create({
       data: {
@@ -125,8 +170,8 @@ export class DemandesService {
         destination: dto.destination || null,
         moyenTransport: dto.moyenTransport || null,
         fraisEstimes: dto.fraisEstimes || null,
-        statut: StatutDemandeRH.EN_ATTENTE_N1,
-        etapeCourante: 1,
+        statut: statutInitial,
+        etapeCourante: etapeInitiale,
         cycleRejetCount: 0,
       },
       include: {

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, Headers, UseGuards } from "@nestjs/common";
 import { DemandesService } from "./demandes.service";
 import { CreateDemandeDto } from "./dto/create-demande.dto";
+import { UpdateTypeWorkflowDto } from "./dto/update-type-workflow.dto";
 
 @Controller("demandes-rh")
 export class DemandesController {
@@ -9,6 +10,14 @@ export class DemandesController {
   @Get("types")
   async getTypesDemande() {
     return this.demandesService.getTypesDemande();
+  }
+
+  @Put("types/:id")
+  async updateTypeWorkflow(
+    @Param("id") id: string,
+    @Body() dto: UpdateTypeWorkflowDto
+  ) {
+    return this.demandesService.updateTypeWorkflow(id, dto);
   }
 
   @Post()

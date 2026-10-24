@@ -45,8 +45,20 @@ export class ValidationsService {
     let cycleRejet = demande.cycleRejetCount;
 
     if (dto.decision === DecisionValidation.APPROUVE) {
-      nouveauStatut = StatutDemandeRH.EN_ATTENTE_DRH;
-      nouvelleEtape = 2; // Étape 2 : DRH
+      if (demande.typeDemande.workflowDrh) {
+        nouveauStatut = StatutDemandeRH.EN_ATTENTE_DRH;
+        nouvelleEtape = 2; // Étape 2 : DRH
+      } else {
+        const needDg = demande.typeDemande.workflowDg && 
+          (demande.typeDemande.seuilDgJours === 0 || Number(demande.nombreJours) > demande.typeDemande.seuilDgJours);
+        if (needDg) {
+          nouveauStatut = StatutDemandeRH.EN_ATTENTE_DG;
+          nouvelleEtape = 3; // Étape 3 : DG
+        } else {
+          nouveauStatut = StatutDemandeRH.APPROUVEE;
+          nouvelleEtape = 4;
+        }
+      }
     } else {
       cycleRejet += 1;
       nouveauStatut = cycleRejet >= 3 ? StatutDemandeRH.REFUSEE : StatutDemandeRH.RETOURNEE_EMPLOYE;
@@ -146,8 +158,16 @@ export class ValidationsService {
     let nouvelleEtape = demande.etapeCourante;
 
     if (dto.decision === DecisionValidation.APPROUVE) {
-      nouveauStatut = StatutDemandeRH.EN_ATTENTE_DG;
-      nouvelleEtape = 3;
+      const needDg = demande.typeDemande.workflowDg && 
+        (demande.typeDemande.seuilDgJours === 0 || Number(demande.nombreJours) > demande.typeDemande.seuilDgJours);
+
+      if (needDg) {
+        nouveauStatut = StatutDemandeRH.EN_ATTENTE_DG;
+        nouvelleEtape = 3;
+      } else {
+        nouveauStatut = StatutDemandeRH.APPROUVEE;
+        nouvelleEtape = 4;
+      }
     } else {
       nouveauStatut = StatutDemandeRH.RETOURNEE_N1;
       nouvelleEtape = 1;
@@ -187,16 +207,26 @@ export class ValidationsService {
     });
 
     if (dto.decision === DecisionValidation.APPROUVE) {
-      const dgUser = await this.prismaShared.utilisateurs_cache.findFirst({
-        where: { OR: [{ role: "N2" }, { isCodir: true }] },
-      });
-      if (dgUser) {
+      if (nouveauStatut === StatutDemandeRH.EN_ATTENTE_DG) {
+        const dgUser = await this.prismaShared.utilisateurs_cache.findFirst({
+          where: { OR: [{ role: "N2" }, { isCodir: true }] },
+        });
+        if (dgUser) {
+          await this.notificationsService.createNotification({
+            userId: dgUser.id_microsoft,
+            titre: `Demande RH à valider (Direction) : ${demande.salarieNom || "Collaborateur"}`,
+            message: `Demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) vérifiée par la DRH, soumise à votre validation.`,
+            type: "ACTION",
+            lien: "/dashboard/mon-equipe/demandes",
+          });
+        }
+      } else {
         await this.notificationsService.createNotification({
-          userId: dgUser.id_microsoft,
-          titre: `Demande RH à valider (Direction) : ${demande.salarieNom || "Collaborateur"}`,
-          message: `Demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) vérifiée par la DRH, soumise à votre validation.`,
-          type: "ACTION",
-          lien: "/dashboard/mon-equipe/demandes",
+          userId: demande.salarieId,
+          titre: `Demande RH validée par la DRH : ${demande.typeDemande.libelle}`,
+          message: `Votre demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) a été validée avec succès.`,
+          type: "INFO",
+          lien: "/dashboard/mon-espace/demandes",
         });
       }
     } else {

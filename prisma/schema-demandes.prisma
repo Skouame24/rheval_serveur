@@ -23,6 +23,11 @@ model types_demande {
   delaiMinJours  Int           @default(2) // Prévenance en jours
   dureeMaxJours  Int?          // Plafond réglementaire
   actif          Boolean       @default(true)
+  workflowN1     Boolean       @default(true) // Étape 1 : Avis N+1 requis
+  workflowDrh    Boolean       @default(true) // Étape 2 : Visa DRH requis
+  workflowDg     Boolean       @default(true) // Étape 3 : Accord DG requis
+  seuilDgJours   Int           @default(0)    // 0 = Systématique si workflowDg=true ; >0 = uniquement si nombreJours > seuilDgJours
+  description    String?       // Directives / consignes pour les collaborateurs
   createdAt      DateTime      @default(now())
   demandes       demandes_rh[]
 }
