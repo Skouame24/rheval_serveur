@@ -22,6 +22,8 @@ const FICHE_INCLUDE = {
 
 @Injectable()
 export class EvaluationsService {
+  private lastEnsureFichesTime = 0;
+  private rhFichesCache: { data: any[]; timestamp: number } | null = null;
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -953,45 +955,64 @@ export class EvaluationsService {
 
   private async ensureFichesForActiveCycle() {
     try {
+      // Throttle : exécuter au maximum une fois toutes les 10 minutes (évite la tempête de requêtes)
+      if (Date.now() - this.lastEnsureFichesTime < 10 * 60 * 1000) {
+        return;
+      }
+
       const cycle = await this.prisma.cycles_evaluation.findFirst({
         where: { statut: { in: ['ACTIF', 'EN_COURS'] } },
         orderBy: { annee: 'desc' },
+        select: { id: true },
       });
       if (!cycle) return;
 
-      const subordinates = await this.prisma.utilisateurs_cache.findMany({
-        where: { managerId: { not: null } },
-      });
+      const [subordinates, existingFiches] = await Promise.all([
+        this.prisma.utilisateurs_cache.findMany({
+          where: { managerId: { not: null } },
+          select: { id_microsoft: true },
+        }),
+        this.prisma.fiches_evaluation.findMany({
+          where: { cycleId: cycle.id },
+          select: { salarieId: true },
+        }),
+      ]);
 
-      for (const sub of subordinates) {
-        const existing = await this.prisma.fiches_evaluation.findFirst({
-          where: { salarieId: sub.id_microsoft, cycleId: cycle.id },
+      const existingSet = new Set(existingFiches.map((f) => f.salarieId));
+      const missing = subordinates.filter((s) => !existingSet.has(s.id_microsoft));
+
+      if (missing.length > 0) {
+        await this.prisma.fiches_evaluation.createMany({
+          data: missing.map((sub, idx) => ({
+            id: 'fic-' + sub.id_microsoft.substring(0, 8) + '-' + (Date.now() + idx).toString(36),
+            statut: 'FIXATION_OBJECTIFS',
+            cycleId: cycle.id,
+            salarieId: sub.id_microsoft,
+            updatedAt: new Date(),
+          })),
+          skipDuplicates: true,
         });
-        if (!existing) {
-          await this.prisma.fiches_evaluation.create({
-            data: {
-              id: 'fic-' + sub.id_microsoft.substring(0, 8) + '-' + Date.now().toString(36),
-              statut: 'FIXATION_OBJECTIFS',
-              cycleId: cycle.id,
-              salarieId: sub.id_microsoft,
-              updatedAt: new Date(),
-            },
-          });
-        }
       }
+      this.lastEnsureFichesTime = Date.now();
     } catch (e) {
       // Ignorer silencieusement si la synchronisation échoue
     }
   }
 
   async getAllForRh() {
+    if (this.rhFichesCache && Date.now() - this.rhFichesCache.timestamp < 15 * 1000) {
+      return this.rhFichesCache.data;
+    }
+
     await this.ensureFichesForActiveCycle();
     const fiches = await this.prisma.fiches_evaluation.findMany({
       include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
-    return fiches.map(mapFicheToDto);
+    const data = fiches.map(mapFicheToDto);
+    this.rhFichesCache = { data, timestamp: Date.now() };
+    return data;
   }
 
   async getN2TeamEvaluations(n2Id?: string, userEmail?: string) {

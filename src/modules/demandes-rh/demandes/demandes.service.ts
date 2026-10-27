@@ -12,6 +12,11 @@ import { NotificationsService } from "../../notifications/notifications.service"
 @Injectable()
 export class DemandesService {
   private readonly logger = new Logger(DemandesService.name);
+  private static cachedAllDemandes: { data: any[]; timestamp: number } | null = null;
+
+  public static clearAllDemandesCache() {
+    DemandesService.cachedAllDemandes = null;
+  }
 
   constructor(
     private readonly prismaDemandes: PrismaDemandesService,
@@ -198,10 +203,11 @@ export class DemandesService {
         titre: `Nouvelle demande RH : ${nomComplet}`,
         message: `${nomComplet} a soumis une demande de ${typeDemande.libelle} (${nombreJours} j) du ${dDebut.toLocaleDateString("fr-FR")} au ${dFin.toLocaleDateString("fr-FR")}.`,
         type: "ACTION",
-        lien: "/dashboard/mon-equipe/demandes",
+        lien: "/absences/validations",
       });
     }
 
+    DemandesService.clearAllDemandesCache();
     this.logger.log(`[DemandesService] Demande ${numeroDemande} créée pour ${nomComplet} (${nombreJours} j)`);
     return demande;
   }
@@ -243,7 +249,10 @@ export class DemandesService {
   }
 
   async getAllDemandes() {
-    return this.prismaDemandes.demandes_rh.findMany({
+    if (DemandesService.cachedAllDemandes && Date.now() - DemandesService.cachedAllDemandes.timestamp < 15 * 1000) {
+      return DemandesService.cachedAllDemandes.data;
+    }
+    const data = await this.prismaDemandes.demandes_rh.findMany({
       include: {
         typeDemande: true,
         validations: {
@@ -255,6 +264,8 @@ export class DemandesService {
       },
       orderBy: { createdAt: "desc" },
     });
+    DemandesService.cachedAllDemandes = { data, timestamp: Date.now() };
+    return data;
   }
 
   async getDemandeById(id: string) {
@@ -299,6 +310,7 @@ export class DemandesService {
       );
     }
 
+    DemandesService.clearAllDemandesCache();
     const updated = await this.prismaDemandes.demandes_rh.update({
       where: { id },
       data: {
