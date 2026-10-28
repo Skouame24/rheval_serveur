@@ -1,9 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, Headers } from '@nestjs/common';
 import { EvaluationsService } from './evaluations.service';
+import { EvaluationsCronService } from './evaluations-cron.service';
 
 @Controller()
 export class EvaluationsController {
-  constructor(private readonly evaluationsService: EvaluationsService) {}
+  constructor(
+    private readonly evaluationsService: EvaluationsService,
+    private readonly evaluationsCronService: EvaluationsCronService,
+  ) {}
 
   @Get('evaluations/me/current')
   async getMyCurrent(
@@ -153,5 +157,16 @@ export class EvaluationsController {
     @Headers('x-user-email') userEmail?: string,
   ) {
     return this.evaluationsService.getN1TeamEvaluations(managerId, userEmail);
+  }
+
+  @Post('evaluations/relances/execute')
+  async triggerRelances(@Body() body?: { seuilJours?: number }) {
+    const seuil = body?.seuilJours ?? 5;
+    return this.evaluationsCronService.executeRelances(seuil);
+  }
+
+  @Get('evaluations/relances/status')
+  async getRelancesStatus() {
+    return this.evaluationsCronService.getStatus();
   }
 }
