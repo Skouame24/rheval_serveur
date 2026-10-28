@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Headers } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 
 @Controller()
@@ -11,6 +11,15 @@ export class EmployeesController {
     @Headers('x-user-email') userEmail?: string,
   ) {
     return this.employeesService.getMe(userId, userEmail);
+  }
+
+  @Put('employees/me')
+  async updateMe(
+    @Body() body: { telephone?: string },
+    @Headers('x-user-id') userId?: string,
+    @Headers('x-user-email') userEmail?: string,
+  ) {
+    return this.employeesService.updateMe(userId, userEmail, body);
   }
 
   @Get('employees/n2-subordinates')

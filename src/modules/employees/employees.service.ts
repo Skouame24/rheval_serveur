@@ -38,6 +38,34 @@ export class EmployeesService {
     };
   }
 
+  async updateMe(userId?: string, userEmail?: string, data?: { telephone?: string }) {
+    let user = null;
+    if (userId) {
+      user = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: userId },
+      });
+    }
+
+    if (!user && userEmail) {
+      user = await this.prisma.utilisateurs_cache.findFirst({
+        where: { email: { equals: userEmail, mode: 'insensitive' } },
+      });
+    }
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    const updated = await this.prisma.utilisateurs_cache.update({
+      where: { id_microsoft: user.id_microsoft },
+      data: {
+        telephone: data?.telephone !== undefined ? data.telephone : user.telephone,
+      },
+    });
+
+    return this.getMe(updated.id_microsoft, updated.email);
+  }
+
   async getById(id: string) {
     const user = await this.prisma.utilisateurs_cache.findUnique({
       where: { id_microsoft: id },
