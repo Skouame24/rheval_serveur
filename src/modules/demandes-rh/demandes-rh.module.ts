@@ -10,6 +10,7 @@ import { DemandesService } from "./demandes/demandes.service";
 // Validations
 import { ValidationsController } from "./validations/validations.controller";
 import { ValidationsService } from "./validations/validations.service";
+import { DelegationsService } from "./validations/delegations.service";
 
 // Soldes
 import { SoldesController } from "./soldes/soldes.controller";
@@ -28,12 +29,14 @@ import { DocumentsService } from "./documents/documents.service";
   providers: [
     DemandesService,
     ValidationsService,
+    DelegationsService,
     SoldesService,
     DocumentsService,
   ],
   exports: [
     DemandesService,
     ValidationsService,
+    DelegationsService,
     SoldesService,
     DocumentsService,
   ],

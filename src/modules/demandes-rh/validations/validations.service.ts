@@ -6,6 +6,7 @@ import { StatutDemandeRH, DecisionValidation } from "../constants/statuts-demand
 import { SoldesService } from "../soldes/soldes.service";
 import { DocumentsService } from "../documents/documents.service";
 import { NotificationsService } from "../../notifications/notifications.service";
+import { DelegationsService } from "./delegations.service";
 
 @Injectable()
 export class ValidationsService {
@@ -16,7 +17,8 @@ export class ValidationsService {
     private readonly prismaShared: PrismaService,
     private readonly soldesService: SoldesService,
     private readonly documentsService: DocumentsService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly delegationsService: DelegationsService,
   ) {}
 
   // ── 1. VALIDATION PAR LE SUPÉRIEUR DIRECT (N+1) ─────────────
@@ -39,6 +41,37 @@ export class ValidationsService {
     const valideur = await this.prismaShared.utilisateurs_cache.findUnique({
       where: { id_microsoft: valideurId },
     });
+
+    // Détection si validation directe par le manager ou par un intérimaire habilité
+    const isDirect =
+      demande.managerId === valideurId ||
+      (valideur && (demande.managerId === valideur.id_microsoft || demande.managerId === valideur.email));
+
+    let isInterim = false;
+    let delegantNom = '';
+
+    if (!isDirect && demande.managerId) {
+      const isInterimActive = await this.delegationsService.isUserActiveInterimForManager(
+        valideurId,
+        demande.managerId,
+      );
+      if (isInterimActive) {
+        isInterim = true;
+        const delegant = await this.prismaShared.utilisateurs_cache.findFirst({
+          where: { OR: [{ id_microsoft: demande.managerId }, { email: demande.managerId }] },
+        });
+        delegantNom = delegant?.nom || 'Responsable N+1';
+      }
+    }
+
+    const nomValideurFinal = isInterim
+      ? `${valideur?.nom || 'Intérimaire'} (par intérim de ${delegantNom})`
+      : (valideur ? valideur.nom : 'Responsable N+1');
+
+    const roleValideurFinal = isInterim ? 'INTERIM_N1' : 'N1';
+    const motifDecision = isInterim && dto.motif
+      ? `[Par intérim de ${delegantNom}] ${dto.motif}`
+      : (dto.motif || null);
 
     let nouveauStatut: StatutDemandeRH;
     let nouvelleEtape = demande.etapeCourante;
@@ -78,10 +111,10 @@ export class ValidationsService {
         demandeId,
         etape: 1,
         valideurId,
-        valideurNom: valideur ? valideur.nom : "Responsable N+1",
-        valideurRole: "N1",
+        valideurNom: nomValideurFinal,
+        valideurRole: roleValideurFinal,
         decision: dto.decision,
-        motif: dto.motif || null,
+        motif: motifDecision,
       },
     });
 
@@ -99,11 +132,13 @@ export class ValidationsService {
       data: {
         demandeId,
         auteurId: valideurId,
-        auteurNom: valideur ? valideur.nom : "Responsable N+1",
-        action: `DECISION_N1_${dto.decision}`,
+        auteurNom: nomValideurFinal,
+        action: isInterim ? `DECISION_N1_${dto.decision}_PAR_INTERIM` : `DECISION_N1_${dto.decision}`,
         statutPrecedent: demande.statut as any,
         nouveauStatut,
-        commentaire: dto.motif || "Avis favorable accordé par le Supérieur direct (N+1).",
+        commentaire: isInterim
+          ? `Avis accordé par intérim (${valideur?.nom || 'Intérimaire'} pour ${delegantNom}). Motif : "${dto.motif || 'Avis favorable'}"`
+          : (dto.motif || 'Avis favorable accordé par le Supérieur direct (N+1).'),
       },
     });
 
@@ -403,7 +438,14 @@ export class ValidationsService {
       if (mgr.email && !mgrIds.includes(mgr.email)) mgrIds.push(mgr.email);
     }
 
-    return this.prismaDemandes.demandes_rh.findMany({
+    // Récupérer les délégations actives où cet utilisateur est désigné intérimaire
+    const activeDelegations = await this.delegationsService.getActiveDelegationsForInterim(managerId);
+    for (const del of activeDelegations) {
+      if (!mgrIds.includes(del.managerId)) mgrIds.push(del.managerId);
+      if (del.managerEmail && !mgrIds.includes(del.managerEmail)) mgrIds.push(del.managerEmail);
+    }
+
+    const demandes = await this.prismaDemandes.demandes_rh.findMany({
       where: {
         managerId: { in: mgrIds },
         statut: { in: [StatutDemandeRH.EN_ATTENTE_N1, StatutDemandeRH.RETOURNEE_N1] },
@@ -413,6 +455,24 @@ export class ValidationsService {
         validations: true,
       },
       orderBy: { createdAt: "desc" },
+    });
+
+    // Taguer les demandes reçues par intérim / délégation
+    return demandes.map((d) => {
+      const isForDelegation =
+        d.managerId !== managerId &&
+        (!mgr || (d.managerId !== mgr.id_microsoft && d.managerId !== mgr.email));
+
+      const matchedDelegation = isForDelegation
+        ? activeDelegations.find((del) => del.managerId === d.managerId || del.managerEmail === d.managerId)
+        : null;
+
+      return {
+        ...d,
+        estDelegation: isForDelegation,
+        delegueParNom: matchedDelegation ? matchedDelegation.managerNom : (isForDelegation ? 'Responsable N+1' : null),
+        delegueMotif: matchedDelegation ? matchedDelegation.motif : null,
+      };
     });
   }
 

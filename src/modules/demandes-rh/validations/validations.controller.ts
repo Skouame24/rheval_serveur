@@ -1,10 +1,42 @@
-import { Controller, Get, Put, Post, Body, Param, Headers, UseGuards } from "@nestjs/common";
+import { Controller, Get, Put, Post, Delete, Body, Param, Headers, UseGuards } from "@nestjs/common";
 import { ValidationsService } from "./validations.service";
+import { DelegationsService } from "./delegations.service";
 import { DecisionValidationDto } from "./dto/decision-validation.dto";
 
 @Controller("validations-rh")
 export class ValidationsController {
-  constructor(private readonly validationsService: ValidationsService) {}
+  constructor(
+    private readonly validationsService: ValidationsService,
+    private readonly delegationsService: DelegationsService,
+  ) {}
+
+  // ── Gestion de l'Intérim & Délégation de validation ────────
+  @Get("delegation")
+  async getMyDelegation(@Headers("x-user-id") managerId?: string) {
+    const mgrId = managerId || "1f77edad-716c-4552-b96f-58ec7d1ee1d7";
+    return this.delegationsService.getMyActiveDelegation(mgrId);
+  }
+
+  @Post("delegation")
+  async setDelegation(
+    @Body() dto: { interimId: string; motif?: string; dateDebut?: string; dateFin?: string | null },
+    @Headers("x-user-id") managerId?: string
+  ) {
+    const mgrId = managerId || "1f77edad-716c-4552-b96f-58ec7d1ee1d7";
+    return this.delegationsService.setDelegation(mgrId, dto);
+  }
+
+  @Delete("delegation")
+  async revokeDelegation(@Headers("x-user-id") managerId?: string) {
+    const mgrId = managerId || "1f77edad-716c-4552-b96f-58ec7d1ee1d7";
+    return this.delegationsService.revokeDelegation(mgrId);
+  }
+
+  @Get("collaborateurs-eligibles")
+  async getEligibleInterims(@Headers("x-user-id") managerId?: string) {
+    const mgrId = managerId || "1f77edad-716c-4552-b96f-58ec7d1ee1d7";
+    return this.delegationsService.getEligibleInterims(mgrId);
+  }
 
   // ── Files d'attente par rôle ──────────────────────────────
   @Get("n1/a-valider")
