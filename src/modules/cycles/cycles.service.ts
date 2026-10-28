@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CyclesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async getAll() {
     const list = await this.prisma.cycles_evaluation.findMany({
@@ -82,7 +86,7 @@ export class CyclesService {
 
     const cycleId = 'cyc-' + Date.now();
 
-    return this.prisma.cycles_evaluation.create({
+    const created = await this.prisma.cycles_evaluation.create({
       data: {
         id: cycleId,
         libelle: data.libelle,
@@ -99,6 +103,26 @@ export class CyclesService {
         updatedAt: new Date(),
       },
     });
+
+    // Diffuser l'e-mail d'ouverture de campagne à tous les collaborateurs
+    try {
+      const allUsers = await this.prisma.utilisateurs_cache.findMany({
+        select: { id_microsoft: true, nom: true, email: true },
+      });
+      for (const u of allUsers) {
+        this.notificationsService.createNotification({
+          userId: u.id_microsoft,
+          titre: `Ouverture de la Campagne d'Évaluation ${created.annee}`,
+          message: `La Direction des Ressources Humaines a officiellement ouvert la "${created.libelle}". Rendez-vous sur votre espace RH pour la fixation des objectifs.`,
+          type: 'ACTION',
+          lien: '/dashboard/mon-espace',
+        });
+      }
+    } catch (e) {
+      // Ne pas bloquer
+    }
+
+    return created;
   }
 
   async cloturer(id: string) {

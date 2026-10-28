@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ObjectivesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async getMyObjectifs(userId?: string, userEmail?: string) {
     let uId = userId;
@@ -255,6 +259,46 @@ export class ObjectivesService {
         dateAction: new Date(),
       },
     }).catch(() => {});
+
+    // Notifications automatiques aux RH et au salarié (In-App + Brevo SMTP)
+    try {
+      const salarie = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: targetSalarieId },
+      });
+      let n1 = null;
+      if (salarie?.managerId) {
+        n1 = await this.prisma.utilisateurs_cache.findUnique({
+          where: { id_microsoft: salarie.managerId },
+        });
+      }
+
+      // Notifier les RH qu'une validation d'objectifs est en attente
+      const rhUsers = await this.prisma.utilisateurs_cache.findMany({
+        where: { role: { in: ['RH', 'DRH'] } },
+      });
+      for (const rh of rhUsers) {
+        this.notificationsService.createNotification({
+          userId: rh.id_microsoft,
+          titre: `Validation Objectifs requise (RH) : ${salarie?.nom || 'Collaborateur'}`,
+          message: `Le manager ${n1?.nom || 'N+1'} a défini ${data.objectifs.length} objectif(s) pour ${salarie?.nom || 'votre collaborateur'}. Votre validation RH est requise.`,
+          type: 'VALIDATION',
+          lien: '/dashboard/pilotage-rh',
+          ficheId: fiche.id,
+        });
+      }
+
+      // Notifier le collaborateur que ses objectifs ont été fixés
+      this.notificationsService.createNotification({
+        userId: targetSalarieId,
+        titre: `Objectifs 2026 fixés par votre manager`,
+        message: `Votre manager ${n1?.nom || 'N+1'} a défini vos ${data.objectifs.length} objectifs de performance annuels. Ils sont en cours d'examen par la Direction RH.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-espace',
+        ficheId: fiche.id,
+      });
+    } catch (notifErr) {
+      // Ignorer sans bloquer la sauvegarde
+    }
 
     const refreshed = await this.prisma.objectifs.findMany({
       where: { ficheId: fiche.id },

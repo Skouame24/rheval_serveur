@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapFicheToDto } from '../../common/fiche.mapper';
+import { NotificationsService } from '../notifications/notifications.service';
 import * as ExcelJS from 'exceljs';
 import type { Response } from 'express';
 
 @Injectable()
 export class RhService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   // ── Gestion des Cycles ──────────────────────────────────────
 
@@ -104,6 +108,24 @@ export class RhService {
         updatedAt: new Date(),
       },
     });
+
+    // Annonce automatique d'ouverture de campagne à l'ensemble des collaborateurs (In-App + Brevo SMTP)
+    try {
+      const allUsers = await this.prisma.utilisateurs_cache.findMany({
+        select: { id_microsoft: true, nom: true, email: true },
+      });
+      for (const u of allUsers) {
+        this.notificationsService.createNotification({
+          userId: u.id_microsoft,
+          titre: `Ouverture de la Campagne d'Évaluation ${cycle.annee}`,
+          message: `La Direction des Ressources Humaines a officiellement lancé la "${cycle.libelle}". Rendez-vous dans votre espace pour la phase de fixation des objectifs.`,
+          type: 'ACTION',
+          lien: '/dashboard/mon-espace',
+        });
+      }
+    } catch (e) {
+      // Ne pas bloquer la création du cycle
+    }
 
     return {
       id: cycle.id,
@@ -216,6 +238,41 @@ export class RhService {
         dateAction: new Date(),
       },
     });
+
+    // Notifications automatiques aux parties prenantes (Salarié et N+1)
+    try {
+      const salarie = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: existing.salarieId },
+      });
+      let n1 = null;
+      if (salarie?.managerId) {
+        n1 = await this.prisma.utilisateurs_cache.findUnique({
+          where: { id_microsoft: salarie.managerId },
+        });
+      }
+
+      this.notificationsService.createNotification({
+        userId: existing.salarieId,
+        titre: `Arbitrage RH Résolu : Note définitive validée`,
+        message: `La Direction des Ressources Humaines a statué sur votre évaluation annuelle. Note finale retenue : ${dto.noteFinale}/20. Décision : "${dto.decision}". Votre dossier est officiellement clôturé.`,
+        type: 'INFO',
+        lien: '/dashboard/mon-espace/historique',
+        ficheId: id,
+      });
+
+      if (n1) {
+        this.notificationsService.createNotification({
+          userId: n1.id_microsoft,
+          titre: `Arbitrage RH Clôturé : ${salarie?.nom || 'Collaborateur'}`,
+          message: `L'arbitrage concernant l'évaluation de ${salarie?.nom || 'votre collaborateur'} a été tranché par les RH. Note finale attribuée : ${dto.noteFinale}/20.`,
+          type: 'INFO',
+          lien: '/dashboard/mon-equipe/evaluations',
+          ficheId: id,
+        });
+      }
+    } catch (e) {
+      // Ignorer silencieusement
+    }
 
     return {
       success: true,
