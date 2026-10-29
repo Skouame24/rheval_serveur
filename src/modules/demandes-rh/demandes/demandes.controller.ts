@@ -1,11 +1,46 @@
-import { Controller, Get, Post, Put, Body, Param, Headers, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Put, Body, Param, Headers, Query } from "@nestjs/common";
 import { DemandesService } from "./demandes.service";
 import { CreateDemandeDto } from "./dto/create-demande.dto";
 import { UpdateTypeWorkflowDto } from "./dto/update-type-workflow.dto";
+import { MissionsReferentielService } from "../missions/missions-referentiel.service";
+
+export class CalculFraisMissionDto {
+  villeId: string;
+  transportCode: string;
+  nombreJours: number;
+}
 
 @Controller("demandes-rh")
 export class DemandesController {
-  constructor(private readonly demandesService: DemandesService) {}
+  constructor(
+    private readonly demandesService: DemandesService,
+    private readonly missionsReferentielService: MissionsReferentielService
+  ) {}
+
+  // ── RÉFÉRENTIELS MISSIONS, VILLES CI & MOYENS DE TRANSPORT ──
+  @Get("missions/referentiel")
+  getReferentielMissions() {
+    return this.missionsReferentielService.getReferentielComplet();
+  }
+
+  @Get("missions/villes-ci")
+  getVillesCI() {
+    return this.missionsReferentielService.getVillesCI();
+  }
+
+  @Get("missions/moyens-transport")
+  getMoyensTransport() {
+    return this.missionsReferentielService.getMoyensTransport();
+  }
+
+  @Post("missions/calcul-frais")
+  calculerFraisMission(@Body() dto: CalculFraisMissionDto) {
+    return this.missionsReferentielService.calculerFrais(
+      dto.villeId,
+      dto.transportCode,
+      dto.nombreJours
+    );
+  }
 
   @Get("types")
   async getTypesDemande() {
@@ -54,4 +89,3 @@ export class DemandesController {
     return this.demandesService.annulerDemande(id, salarieId);
   }
 }
-

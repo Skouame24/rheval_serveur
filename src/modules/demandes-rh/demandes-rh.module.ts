@@ -19,6 +19,9 @@ import { SoldesService } from "./soldes/soldes.service";
 // Documents
 import { DocumentsService } from "./documents/documents.service";
 
+// Missions & Référentiel CI
+import { MissionsReferentielService } from "./missions/missions-referentiel.service";
+
 @Module({
   imports: [PrismaModule, PrismaDemandesModule, NotificationsModule],
   controllers: [
@@ -32,6 +35,7 @@ import { DocumentsService } from "./documents/documents.service";
     DelegationsService,
     SoldesService,
     DocumentsService,
+    MissionsReferentielService,
   ],
   exports: [
     DemandesService,
@@ -39,7 +43,7 @@ import { DocumentsService } from "./documents/documents.service";
     DelegationsService,
     SoldesService,
     DocumentsService,
+    MissionsReferentielService,
   ],
 })
 export class DemandesRhModule {}
-
