@@ -55,6 +55,15 @@ async function main() {
       dureeMaxJours: 60,
     },
     {
+      code: "INTERVENTION_TERRAIN",
+      libelle: "Fiche d'Intervention Technique",
+      categorie: "MISSION",
+      necessiteSolde: false,
+      pieceRequise: false,
+      delaiMinJours: 0,
+      dureeMaxJours: 60,
+    },
+    {
       code: "AUTRE_ABSENCE",
       libelle: "Autre Motif d'Absence",
       categorie: "AUTRE",

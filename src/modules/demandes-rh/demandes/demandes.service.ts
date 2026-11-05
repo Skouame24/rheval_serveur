@@ -105,10 +105,26 @@ export class DemandesService {
     const direction = salarie ? salarie.departement : null;
     const managerId = salarie ? salarie.managerId : null;
 
-    // 2. Type de demande
-    const typeDemande = await this.prismaDemandes.types_demande.findUnique({
+    // 2. Type de demande (auto-création résiliente pour INTERVENTION_TERRAIN si non initialisé)
+    let typeDemande = await this.prismaDemandes.types_demande.findUnique({
       where: { code: dto.typeCode },
     });
+    if (!typeDemande && dto.typeCode === "INTERVENTION_TERRAIN") {
+      typeDemande = await this.prismaDemandes.types_demande.create({
+        data: {
+          code: "INTERVENTION_TERRAIN",
+          libelle: "Fiche d'Intervention Technique",
+          categorie: "MISSION",
+          necessiteSolde: false,
+          pieceRequise: false,
+          delaiMinJours: 0,
+          dureeMaxJours: 60,
+          workflowN1: true,
+          workflowDrh: true,
+          workflowDg: true,
+        },
+      });
+    }
     if (!typeDemande) {
       throw new NotFoundException(`Type de demande '${dto.typeCode}' inconnu.`);
     }

@@ -155,6 +155,13 @@ export class ValidationsService {
           lien: "/absences/validations",
         });
       }
+      await this.notificationsService.createNotification({
+        userId: demande.salarieId,
+        titre: `Avis favorable N+1 sur votre demande : ${demande.typeDemande.libelle}`,
+        message: `Votre responsable N+1 a accordé un avis favorable à votre demande (${demande.nombreJours} j). Elle a été transmise à la DRH.`,
+        type: "INFO",
+        lien: "/absences/demandes",
+      });
     } else {
       await this.notificationsService.createNotification({
         userId: demande.salarieId,
@@ -354,6 +361,24 @@ export class ValidationsService {
         message: dto.decision === DecisionValidation.APPROUVE ? `Le titre d'absence de ${demande.salarieNom} peut être édité.` : `Motif DG : "${dto.motif}"`,
         type: "INFO",
         lien: "/absences/validations",
+      });
+    }
+
+    if (dto.decision === DecisionValidation.APPROUVE) {
+      await this.notificationsService.createNotification({
+        userId: demande.salarieId,
+        titre: `Demande approuvée par la Direction Générale : ${demande.typeDemande.libelle}`,
+        message: `Votre demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) a été définitivement approuvée par la Direction Générale. Votre document officiel A4 est disponible.`,
+        type: "VALIDATION",
+        lien: "/absences/demandes",
+      });
+    } else {
+      await this.notificationsService.createNotification({
+        userId: demande.salarieId,
+        titre: `Demande retournée par la Direction Générale : ${demande.typeDemande.libelle}`,
+        message: `La Direction Générale a formulé une observation sur votre dossier : "${dto.motif}"`,
+        type: "ALERTE",
+        lien: "/absences/demandes",
       });
     }
 
