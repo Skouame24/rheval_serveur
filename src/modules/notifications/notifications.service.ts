@@ -95,11 +95,18 @@ export class NotificationsService {
     }
   }
 
+  private resolvedUserMap = new Map<string, { ids: string[]; timestamp: number }>();
+
   /**
    * Résout l'identifiant Microsoft (id_microsoft) d'un utilisateur, qu'on lui passe un id ou un email
    */
   private async resolveUserId(userId?: string): Promise<string[]> {
     if (!userId) return [];
+    const cached = this.resolvedUserMap.get(userId);
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      return cached.ids;
+    }
+
     const candidates = [userId];
     if (userId.includes('@')) {
       const u = await this.prisma.utilisateurs_cache.findUnique({ where: { email: userId } });
@@ -108,6 +115,7 @@ export class NotificationsService {
       const u = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: userId } });
       if (u?.email) candidates.push(u.email);
     }
+    this.resolvedUserMap.set(userId, { ids: candidates, timestamp: Date.now() });
     return candidates;
   }
 
