@@ -687,15 +687,15 @@ export class EvaluationsService {
         const obj = existing.objectifs.find((o) => o.id === item.objectifId);
         const p = Number(obj?.ponderation) || 0;
         if (p > 0) {
-          sumPond += Number(item.note) * (p / 100);
+          sumPond += Number(item.note) * p;
           totalPond += p;
         }
       }
       if (totalPond > 0) {
-        noteGlobale = Number(sumPond.toFixed(2)) as any;
+        noteGlobale = Number(Math.min(20, Math.max(0, sumPond / totalPond)).toFixed(2)) as any;
       } else {
         const sum = dto.notes.reduce((acc, curr) => acc + Number(curr.note), 0);
-        noteGlobale = Number((sum / dto.notes.length).toFixed(2)) as any;
+        noteGlobale = Number(Math.min(20, Math.max(0, sum / dto.notes.length)).toFixed(2)) as any;
       }
     }
 
@@ -808,7 +808,7 @@ export class EvaluationsService {
       where: { id: existing.id },
       data: {
         statut: nextStatut,
-        observation: dto.observations || existing.observation,
+        observation: existing.observation, // Conserver le commentaire N+1 intact
         updatedAt: new Date(),
       },
       include: FICHE_INCLUDE,
