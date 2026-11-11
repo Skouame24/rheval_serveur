@@ -4,9 +4,25 @@ import { mapUserToDto } from '../../common/user.mapper';
 
 @Injectable()
 export class EmployeesService {
+  private userProfileCache = new Map<string, { data: any; timestamp: number }>();
+
   constructor(private prisma: PrismaService) {}
 
+  clearCache(key?: string) {
+    if (key) {
+      this.userProfileCache.delete(key);
+    } else {
+      this.userProfileCache.clear();
+    }
+  }
+
   async getMe(userId?: string, userEmail?: string) {
+    const cacheKey = `${userId || ''}:${userEmail || ''}`;
+    const cached = this.userProfileCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 45_000) {
+      return cached.data;
+    }
+
     let user = null;
     if (userId) {
       user = await this.prisma.utilisateurs_cache.findUnique({
@@ -31,14 +47,18 @@ export class EmployeesService {
     });
 
     const dto = mapUserToDto(user, n1User, n2User, drhUser);
-    return {
+    const result = {
       ...dto,
       hasTeam: teamCount > 0,
       teamCount,
     };
+
+    this.userProfileCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   }
 
   async updateMe(userId?: string, userEmail?: string, data?: { telephone?: string }) {
+    this.userProfileCache.clear();
     let user = null;
     if (userId) {
       user = await this.prisma.utilisateurs_cache.findUnique({

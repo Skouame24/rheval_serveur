@@ -4,16 +4,34 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CyclesService {
+  private activeCycleCache: { data: any; timestamp: number } | null = null;
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
   ) {}
 
+  clearCache() {
+    this.activeCycleCache = null;
+  }
+
   async getAll() {
     const list = await this.prisma.cycles_evaluation.findMany({
       orderBy: { annee: 'desc' },
-      include: {
-        fiches_evaluation: true,
+      select: {
+        id: true,
+        libelle: true,
+        annee: true,
+        typeCycle: true,
+        statut: true,
+        dateOuverture: true,
+        dateFermeture: true,
+        dateDebutFixation: true,
+        dateFinFixation: true,
+        dateDebutEval: true,
+        dateFinEval: true,
+        creeParUserId: true,
+        updatedAt: true,
       },
     });
     return list.map((c) => ({
@@ -24,20 +42,39 @@ export class CyclesService {
   }
 
   async getActif() {
+    if (this.activeCycleCache && Date.now() - this.activeCycleCache.timestamp < 60_000) {
+      return this.activeCycleCache.data;
+    }
+
     const cycle = await this.prisma.cycles_evaluation.findFirst({
       where: { statut: { in: ['ACTIF', 'EN_COURS'] } },
-      include: {
-        fiches_evaluation: true,
+      select: {
+        id: true,
+        libelle: true,
+        annee: true,
+        typeCycle: true,
+        statut: true,
+        dateOuverture: true,
+        dateFermeture: true,
+        dateDebutFixation: true,
+        dateFinFixation: true,
+        dateDebutEval: true,
+        dateFinEval: true,
+        creeParUserId: true,
+        updatedAt: true,
       },
     });
 
     if (!cycle) return null;
 
-    return {
+    const result = {
       ...cycle,
       dateDebut: cycle.dateOuverture ? cycle.dateOuverture.toISOString().split('T')[0] : null,
       dateFin: cycle.dateFermeture ? cycle.dateFermeture.toISOString().split('T')[0] : null,
     };
+
+    this.activeCycleCache = { data: result, timestamp: Date.now() };
+    return result;
   }
 
   async create(data: {
@@ -122,10 +159,12 @@ export class CyclesService {
       // Ne pas bloquer
     }
 
+    this.clearCache();
     return created;
   }
 
   async cloturer(id: string) {
+    this.clearCache();
     const existing = await this.prisma.cycles_evaluation.findUnique({
       where: { id },
     });

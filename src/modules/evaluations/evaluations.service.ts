@@ -24,10 +24,23 @@ const FICHE_INCLUDE = {
 export class EvaluationsService {
   private lastEnsureFichesTime = 0;
   private rhFichesCache: { data: any[]; timestamp: number } | null = null;
+  private n1FichesCache = new Map<string, { data: any[]; timestamp: number }>();
+  private n2FichesCache = new Map<string, { data: any[]; timestamp: number }>();
+  private myCurrentCache = new Map<string, { data: any; timestamp: number }>();
+  private ficheDetailCache = new Map<string, { data: any; timestamp: number }>();
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
   ) {}
+
+  public clearAllCaches() {
+    this.rhFichesCache = null;
+    this.n1FichesCache.clear();
+    this.n2FichesCache.clear();
+    this.myCurrentCache.clear();
+    this.ficheDetailCache.clear();
+  }
 
   private async getHierarchyActors(salarieId: string) {
     const salarie = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: salarieId } });
@@ -43,6 +56,12 @@ export class EvaluationsService {
   }
 
   async getMyCurrent(userId?: string, userEmail?: string) {
+    const cacheKey = `${userId || ''}:${userEmail || ''}`;
+    const cached = this.myCurrentCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 30_000) {
+      return cached.data;
+    }
+
     let uId = userId;
     if (userId) {
       const u = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: userId } });
@@ -62,6 +81,7 @@ export class EvaluationsService {
     if (!uId) return null;
 
     let fiche = await this.prisma.fiches_evaluation.findFirst({
+      relationLoadStrategy: 'join',
       where: { salarieId: uId },
       orderBy: { createdAt: 'desc' },
       include: FICHE_INCLUDE,
@@ -78,6 +98,7 @@ export class EvaluationsService {
       });
       if (user) {
         fiche = await this.prisma.fiches_evaluation.findFirst({
+          relationLoadStrategy: 'join',
           where: { salarieId: user.id_microsoft },
           orderBy: { createdAt: 'desc' },
           include: FICHE_INCLUDE,
@@ -86,7 +107,9 @@ export class EvaluationsService {
     }
 
     if (!fiche) return null;
-    return mapFicheToDto(fiche);
+    const result = mapFicheToDto(fiche);
+    this.myCurrentCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   }
 
   async getMyHistory(userId?: string, annee?: number, statut?: string, userEmail?: string) {
@@ -130,13 +153,20 @@ export class EvaluationsService {
   }
 
   async getOne(id: string) {
+    const cached = this.ficheDetailCache.get(id);
+    if (cached && Date.now() - cached.timestamp < 30_000) {
+      return cached.data;
+    }
+
     let fiche = await this.prisma.fiches_evaluation.findUnique({
+      relationLoadStrategy: 'join',
       where: { id },
       include: FICHE_INCLUDE,
     });
 
     if (!fiche) {
       fiche = await this.prisma.fiches_evaluation.findFirst({
+        relationLoadStrategy: 'join',
         where: { salarieId: id },
         orderBy: { createdAt: 'desc' },
         include: FICHE_INCLUDE,
@@ -147,7 +177,9 @@ export class EvaluationsService {
       throw new NotFoundException(`Fiche ${id} introuvable`);
     }
 
-    return mapFicheToDto(fiche);
+    const result = mapFicheToDto(fiche);
+    this.ficheDetailCache.set(id, { data: result, timestamp: Date.now() });
+    return result;
   }
 
   async signSalarie(id: string, observation: string, userId?: string) {
@@ -155,6 +187,7 @@ export class EvaluationsService {
   }
 
   async submitVisaSalarie(id: string, dto: { accord: boolean; observation?: string }, userId?: string) {
+    this.clearAllCaches();
     const existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
     });
@@ -250,6 +283,7 @@ export class EvaluationsService {
     dto: { objectifs: Array<{ intitule: string; description?: string; ponderation?: number }> },
     managerId?: string
   ) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
     if (!existing) {
       existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
@@ -330,6 +364,7 @@ export class EvaluationsService {
     dto: { decision: 'APPROUVE' | 'REJETE'; observations?: string },
     rhId?: string,
   ) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
     if (!existing) {
       existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
@@ -405,6 +440,7 @@ export class EvaluationsService {
     dto: { decision: 'APPROUVE' | 'REJETE'; observations?: string },
     n2Id?: string,
   ) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
     if (!existing) {
       existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
@@ -477,6 +513,7 @@ export class EvaluationsService {
     dto: { accord?: boolean; observation?: string },
     userId?: string
   ) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id } });
     if (!existing) {
       existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: id }, orderBy: { createdAt: 'desc' } });
@@ -528,6 +565,7 @@ export class EvaluationsService {
     dto: { notes: Array<{ objectifId: string; note: number; commentaire?: string }>; observations?: string },
     userId?: string,
   ) {
+    this.clearAllCaches();
     const existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
       include: { objectifs: true },
@@ -613,6 +651,7 @@ export class EvaluationsService {
     },
     managerId?: string
   ) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
       include: { objectifs: true },
@@ -785,6 +824,7 @@ export class EvaluationsService {
     },
     n2Id?: string,
   ) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
     });
@@ -868,6 +908,7 @@ export class EvaluationsService {
     dto: { statut?: 'VALIDE' | 'CLOTURE' | 'ARBITRAGE'; commentaire?: string; noteFinale?: number },
     rhId?: string,
   ) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({
       where: { id },
     });
@@ -1000,12 +1041,13 @@ export class EvaluationsService {
   }
 
   async getAllForRh() {
-    if (this.rhFichesCache && Date.now() - this.rhFichesCache.timestamp < 15 * 1000) {
+    if (this.rhFichesCache && Date.now() - this.rhFichesCache.timestamp < 30 * 1000) {
       return this.rhFichesCache.data;
     }
 
     await this.ensureFichesForActiveCycle();
     const fiches = await this.prisma.fiches_evaluation.findMany({
+      relationLoadStrategy: 'join',
       include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
@@ -1016,6 +1058,12 @@ export class EvaluationsService {
   }
 
   async getN2TeamEvaluations(n2Id?: string, userEmail?: string) {
+    const cacheKey = `${n2Id || ''}:${userEmail || ''}`;
+    const cached = this.n2FichesCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 30_000) {
+      return cached.data;
+    }
+
     await this.ensureFichesForActiveCycle();
     let director = null;
     if (n2Id) {
@@ -1050,11 +1098,14 @@ export class EvaluationsService {
     // 1. Le Directeur Général / PDG a une vision globale sur l'ensemble des fiches
     if (isGeneralDirector) {
       const fiches = await this.prisma.fiches_evaluation.findMany({
+        relationLoadStrategy: 'join',
         where: { NOT: { salarieId: directorId } },
         include: FICHE_INCLUDE,
         orderBy: { createdAt: 'desc' },
       });
-      return fiches.map(mapFicheToDto);
+      const result = fiches.map(mapFicheToDto);
+      this.n2FichesCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
     }
 
     // 2. Directeur de département (ex: Directrice Commerciale, Directeur Technique) :
@@ -1077,10 +1128,12 @@ export class EvaluationsService {
     // Si le directeur n'a pas encore de subordonnés rattachés ni de collaborateurs dans son département,
     // on renvoie une liste vide : IL NE DOIT JAMAIS VOIR LES AUTRES DÉPARTEMENTS (IT, RH, Finance, etc.)
     if (orConditions.length === 0) {
+      this.n2FichesCache.set(cacheKey, { data: [], timestamp: Date.now() });
       return [];
     }
 
     const fiches = await this.prisma.fiches_evaluation.findMany({
+      relationLoadStrategy: 'join',
       where: {
         AND: [
           { NOT: { salarieId: directorId } },
@@ -1090,10 +1143,18 @@ export class EvaluationsService {
       include: FICHE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
-    return fiches.map(mapFicheToDto);
+    const result = fiches.map(mapFicheToDto);
+    this.n2FichesCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   }
 
   async getN1TeamEvaluations(managerId?: string, userEmail?: string) {
+    const cacheKey = `${managerId || ''}:${userEmail || ''}`;
+    const cached = this.n1FichesCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 30_000) {
+      return cached.data;
+    }
+
     let mgr = null;
     if (managerId) {
       mgr = await this.prisma.utilisateurs_cache.findUnique({
@@ -1124,16 +1185,20 @@ export class EvaluationsService {
     let fiches: any[] = [];
     if (directSubordinateIds.length > 0) {
       fiches = await this.prisma.fiches_evaluation.findMany({
+        relationLoadStrategy: 'join',
         where: { salarieId: { in: directSubordinateIds } },
         include: FICHE_INCLUDE,
         orderBy: { createdAt: 'desc' },
       });
     }
 
-    return fiches.map(mapFicheToDto);
+    const result = fiches.map(mapFicheToDto);
+    this.n1FichesCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   }
 
   async addFormation(ficheId: string, dto: { intitule: string; delai?: string; priorite?: string; objectifVise?: string }) {
+    this.clearAllCaches();
     let existing = await this.prisma.fiches_evaluation.findUnique({ where: { id: ficheId } });
     if (!existing) {
       existing = await this.prisma.fiches_evaluation.findFirst({ where: { salarieId: ficheId }, orderBy: { createdAt: 'desc' } });
@@ -1159,6 +1224,7 @@ export class EvaluationsService {
   }
 
   async deleteFormation(ficheId: string, formationId: string) {
+    this.clearAllCaches();
     await this.prisma.formations.deleteMany({
       where: { id: formationId },
     });
