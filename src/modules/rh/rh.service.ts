@@ -196,11 +196,11 @@ export class RhService {
 
   async getArbitrages() {
     const fiches = await this.prisma.fiches_evaluation.findMany({
-      where: { statut: 'ARBITRAGE' },
+      where: { statut: { in: ['ARBITRAGE', 'ARBITRAGE_RH'] } },
       include: {
         cycles_evaluation: true,
         utilisateurs_cache: true,
-        objectifs: true,
+        objectifs: { include: { evaluations: true } },
         historique_evaluation: true,
       },
     });
@@ -419,4 +419,3 @@ export class RhService {
     res.end();
   }
 }
-

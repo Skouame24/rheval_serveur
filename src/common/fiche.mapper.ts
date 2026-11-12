@@ -23,7 +23,9 @@ export function mapFicheToDto(f: any): any {
 
     const pond = o.ponderation !== undefined && o.ponderation !== null ? Number(o.ponderation) : 0;
     const noteSal = evalSal?.note !== undefined && evalSal?.note !== null ? Number(evalSal.note) : undefined;
-    const noteN1 = evalN1?.note !== undefined && evalN1?.note !== null ? Number(evalN1.note) : (o.noteGlobale ? Number(o.noteGlobale) : undefined);
+    const noteN1 = evalN1?.note !== undefined && evalN1?.note !== null
+      ? Number(evalN1.note)
+      : (o.noteGlobale !== undefined && o.noteGlobale !== null ? Number(o.noteGlobale) : undefined);
     const noteN2 = evalN2?.note !== undefined && evalN2?.note !== null ? Number(evalN2.note) : undefined;
 
     if (noteSal !== undefined) {
@@ -52,6 +54,30 @@ export function mapFicheToDto(f: any): any {
   const noteAutoEvaluation = hasAutoEvaluations && totalPonderationAuto > 0
     ? Number(sumPondereeAuto.toFixed(2))
     : undefined;
+  const getWeightedNote = (key: 'noteObtenue' | 'noteN2') => {
+    const notes = mappedObjectifs.filter(
+      (objectif: any) => objectif[key] !== undefined && objectif[key] !== null,
+    );
+    if (notes.length === 0) return undefined;
+
+    const totalPonderation = notes.reduce(
+      (total: number, objectif: any) => total + (Number(objectif.ponderation) || 0),
+      0,
+    );
+    const weightedTotal = notes.reduce(
+      (total: number, objectif: any) =>
+        total + Number(objectif[key]) * (Number(objectif.ponderation) || 0),
+      0,
+    );
+    const average = totalPonderation > 0
+      ? weightedTotal / totalPonderation
+      : notes.reduce((total: number, objectif: any) => total + Number(objectif[key]), 0) / notes.length;
+
+    return Number(average.toFixed(2));
+  };
+  const noteGlobaleN1 = getWeightedNote('noteObtenue')
+    ?? (f.noteGlobale !== undefined && f.noteGlobale !== null ? Number(f.noteGlobale) : undefined);
+  const noteGlobaleN2 = getWeightedNote('noteN2') ?? noteGlobaleN1;
 
   // Si le salarié a auto-évalué et le statut est encore FIXATION_OBJECTIFS, on avance dynamiquement à EN_ATTENTE_N1
   let resolvedStatut = f.statut;
@@ -62,7 +88,9 @@ export function mapFicheToDto(f: any): any {
   return {
     id: f.id,
     statut: resolvedStatut,
-    noteGlobale: f.noteGlobale ? Number(f.noteGlobale) : undefined,
+    noteGlobale: f.noteGlobale !== undefined && f.noteGlobale !== null ? Number(f.noteGlobale) : undefined,
+    evaluationN1: noteGlobaleN1 !== undefined ? { moyenneNotes: noteGlobaleN1 } : undefined,
+    evaluationN2: noteGlobaleN2 !== undefined ? { moyenneNotes: noteGlobaleN2 } : undefined,
     noteAutoEvaluation: noteAutoEvaluation,
     hasAutoEvaluation: hasAutoEvaluations,
     observation: f.observation || '',
