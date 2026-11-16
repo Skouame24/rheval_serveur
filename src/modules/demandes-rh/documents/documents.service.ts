@@ -11,6 +11,14 @@ export class DocumentsService {
     return `AGY-DEM-${annee}-${seq}`;
   }
 
+  async genererNumeroOrdreMission(annee: number): Promise<string> {
+    const prefix = `JPC/${annee}-`;
+    const count = await this.prisma.demandes_rh.count({
+      where: { numeroOrdreMission: { startsWith: prefix } },
+    });
+    return `${prefix}${String(count + 1).padStart(2, "0")}`;
+  }
+
   async genererNumeroTitre(annee: number = 2026): Promise<string> {
     const count = await this.prisma.demandes_rh.count({
       where: { numeroTitre: { not: null } },

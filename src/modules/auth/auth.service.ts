@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { mapUserToDto } from '../../common/user.mapper';
-import { KNOWN_AGILLY_DIRECTORY } from '../../common/directory.constants';
+import { verifyPassword } from '../../common/password.util';
 
 @Injectable()
 export class AuthService {
@@ -116,30 +116,34 @@ export class AuthService {
     };
   }
 
-  async login(email: string) {
-    let user = await this.prisma.utilisateurs_cache.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
+  async login(email: string, password: string) {
+    if (
+      typeof email !== 'string' ||
+      typeof password !== 'string' ||
+      !email.trim() ||
+      !password
+    ) {
+      throw new UnauthorizedException('Identifiants invalides');
+    }
+
+    const user = await this.prisma.utilisateurs_cache.findFirst({
+      where: { email: { equals: email.trim(), mode: 'insensitive' } },
     });
+    const credentials = user
+      ? await this.prisma.$queryRaw<Array<{ passwordHash: string }>>`
+          SELECT "passwordHash"
+          FROM "auth_credentials"
+          WHERE "userId" = ${user.id_microsoft}
+          LIMIT 1
+        `
+      : [];
 
-    if (!user) {
-      // Déterminer le rôle par défaut selon l'email démo
-      let defaultRole = 'SALARIE';
-      if (email.includes('rh')) defaultRole = 'RH';
-      else if (email.includes('n2')) defaultRole = 'N2';
-      else if (email.includes('n1')) defaultRole = 'N1';
-      else if (email.includes('admin')) defaultRole = 'ADMIN';
-
-      user = await this.prisma.utilisateurs_cache.create({
-        data: {
-          id_microsoft: 'usr-' + Date.now(),
-          nom: email.split('@')[0].toUpperCase(),
-          email: email,
-          role: defaultRole,
-          poste: `Poste ${defaultRole}`,
-          departement: 'Direction Agilly',
-          updatedAt: new Date(),
-        },
-      });
+    if (
+      !user ||
+      !credentials[0] ||
+      !(await verifyPassword(password, credentials[0].passwordHash))
+    ) {
+      throw new UnauthorizedException('Identifiants invalides');
     }
 
     let n1User = null;
@@ -169,10 +173,38 @@ export class AuthService {
   }
 
   async loginAzureAd(accessToken?: string) {
-    // Si un token Azure AD est fourni, on peut récupérer le premier user ou valider
-    const user = await this.prisma.utilisateurs_cache.findFirst();
+    if (!accessToken) {
+      throw new UnauthorizedException('Jeton Microsoft manquant');
+    }
+
+    const graphResponse = await fetch(
+      'https://graph.microsoft.com/v1.0/me?$select=id,mail,userPrincipalName',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!graphResponse.ok) {
+      throw new UnauthorizedException('Jeton Microsoft invalide');
+    }
+
+    const profile = (await graphResponse.json()) as {
+      id?: string;
+      mail?: string;
+      userPrincipalName?: string;
+    };
+    const email = profile.mail || profile.userPrincipalName;
+    const identityFilter = profile.id
+      ? { id_microsoft: profile.id }
+      : email
+        ? { email: { equals: email, mode: 'insensitive' as const } }
+        : null;
+    if (!identityFilter) {
+      throw new UnauthorizedException('Identité Microsoft invalide');
+    }
+
+    const user = await this.prisma.utilisateurs_cache.findFirst({
+      where: identityFilter,
+    });
     if (!user) {
-      throw new UnauthorizedException('Aucun utilisateur configuré');
+      throw new UnauthorizedException('Utilisateur Microsoft non autorisé');
     }
 
     const payload = { sub: user.id_microsoft, email: user.email, role: user.role };

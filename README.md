@@ -1,4 +1,4 @@
-# AGILLY RHEVAL — Backend API
+# PERFORMANCES — Backend API
 
 Backend officiel NestJS & Prisma pour la plateforme de gestion des évaluations annuelles et calcul des bonus du groupe Agilly.
 
@@ -45,4 +45,3 @@ npm run start:prod
 docker build -t rheval-back .
 docker run -d -p 3001:3001 --env-file .env --name rheval-api rheval-back
 ```
-

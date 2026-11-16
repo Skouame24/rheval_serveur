@@ -50,6 +50,10 @@ model soldes_conges {
 model demandes_rh {
   id               String                   @id @default(uuid())
   numeroDemande    String                   @unique // AGY-DEM-2026-00001
+  numeroOrdreMission String?                @unique
+  ordreDonneAId    String?
+  ordreDonneANom   String?
+  ordreDonneAEmail String?
   salarieId        String                   // Identifiant Microsoft SSO
   salarieNom       String?                  // Nom complet
   salarieEmail     String?
@@ -66,6 +70,9 @@ model demandes_rh {
   destination      String?                  // Pour Missions / Déplacements
   moyenTransport   String?                  // Pour Missions
   fraisEstimes     Decimal?                 @db.Decimal(10, 2)
+  clientProjet     String?
+  tarifInterventionJour Decimal?             @db.Decimal(10, 2)
+  equipeIntervention String?
   statut           String                   @default("EN_ATTENTE_N1") // BROUILLON, SOUMISE, EN_ATTENTE_N1, EN_ATTENTE_DRH, EN_ATTENTE_DG, APPROUVEE, PERMISSION_EDITEE, ARCHIVEE, RETOURNEE_EMPLOYE, RETOURNEE_N1, RETOURNEE_DRH, REFUSEE, ANNULEE
   etapeCourante    Int                      @default(1) // 1: N+1, 2: DRH, 3: DG, 4: GED
   cycleRejetCount  Int                      @default(0)

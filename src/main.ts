@@ -2,6 +2,9 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 // Charge .env depuis cwd et depuis le dossier racine du projet (relatif à dist/)
+dotenv.config({ path: path.resolve(__dirname, '..', '.env.developpement.local') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env.development.local') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') });
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 dotenv.config();
 
@@ -11,7 +14,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger, ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  const logger = new Logger('AGILLY-RHEVAL-BACKEND');
+  const logger = new Logger('PERFORMANCES-BACKEND');
   const app = await NestFactory.create(AppModule);
 
   // Validation globale des payloads
@@ -52,7 +55,7 @@ async function bootstrap() {
 
   // Swagger Documentation OpenAPI
   const config = new DocumentBuilder()
-    .setTitle('AGILLY RHEVAL API')
+    .setTitle('PERFORMANCES API')
     .setDescription('Backend officiel de gestion des évaluations annuelles et bonus')
     .setVersion('1.0')
     .addBearerAuth()
@@ -65,7 +68,7 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
 
   logger.log(`=======================================================`);
-  logger.log(`🚀 AGILLY RHEVAL BACKEND démarré sur port ${port} (0.0.0.0:${port}/api)`);
+  logger.log(`🚀 PERFORMANCES BACKEND démarré sur port ${port} (0.0.0.0:${port}/api)`);
   logger.log(`📑 Documentation Swagger : http://localhost:${port}/api/docs`);
   logger.log(`=======================================================`);
 }

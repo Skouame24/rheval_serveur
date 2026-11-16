@@ -1,4 +1,14 @@
-import { IsNotEmpty, IsString, IsDateString, IsBoolean, IsOptional, IsNumber } from "class-validator";
+import {
+  ArrayUnique,
+  IsArray,
+  IsDateString,
+  IsBoolean,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from "class-validator";
 
 export class CreateDemandeDto {
   @IsString()
@@ -36,5 +46,24 @@ export class CreateDemandeDto {
   @IsNumber()
   @IsOptional()
   fraisEstimes?: number;
+
+  @IsString()
+  @IsOptional()
+  ordreDonneAId?: string;
+
+  @IsString()
+  @IsOptional()
+  clientProjet?: string;
+
+  @IsNumber()
+  @Min(1)
+  @IsOptional()
+  tarifInterventionJour?: number;
+
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsOptional()
+  equipeInterventionIds?: string[];
 }
 

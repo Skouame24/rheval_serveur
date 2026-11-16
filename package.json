@@ -1,7 +1,7 @@
 {
   "name": "rhevalback",
   "version": "1.0.0",
-  "description": "Backend NestJS pour AGILLY RHEVAL",
+  "description": "Backend NestJS pour PERFORMANCES",
   "private": true,
   "scripts": {
     "postinstall": "npm run prisma:generate",
@@ -22,6 +22,7 @@
     "db:clear": "ts-node prisma/clear-all.ts",
     "db:reset-actions": "ts-node prisma/reset-actions.ts",
     "db:seed": "ts-node prisma/seed-parcours.ts",
+    "seed:dev-account": "ts-node prisma/seed-dev-account.ts",
     "seed": "ts-node prisma/seed-parcours.ts"
   },
   "dependencies": {

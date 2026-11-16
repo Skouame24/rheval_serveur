@@ -179,9 +179,18 @@ model utilisateurs_cache {
   cycles_evaluation cycles_evaluation[]
   fiches_evaluation fiches_evaluation[]
   notifications     notifications[]
+  credential        auth_credentials?
 
   @@index([managerId])
   @@index([role])
+}
+
+model auth_credentials {
+  userId       String              @id
+  passwordHash String
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  user         utilisateurs_cache @relation(fields: [userId], references: [id_microsoft], onDelete: Cascade)
 }
 
 model notifications {

@@ -15,10 +15,10 @@ export class MailController {
   @Post('test')
   async sendTestMail(@Body() body: { to: string; subject?: string; message?: string }) {
     const to = body.to || 'b68c1a001@smtp-brevo.com';
-    const subject = body.subject || 'Test Brevo SMTP Agilly RHEVAL';
+    const subject = body.subject || 'Test Brevo SMTP PERFORMANCES';
     const message =
       body.message ||
-      'Ceci est un email de test confirmant que la passerelle Brevo SMTP fonctionne correctement sur le portail Agilly RH.';
+      'Ceci est un email de test confirmant que la passerelle Brevo SMTP fonctionne correctement sur le portail PERFORMANCES.';
 
     await this.mailService.sendNotificationEmail(to, subject, message);
     return {
@@ -27,4 +27,3 @@ export class MailController {
     };
   }
 }
-

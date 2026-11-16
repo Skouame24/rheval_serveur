@@ -8,7 +8,7 @@ export class MailService {
   constructor(private mailerService: MailerService) {}
 
   /**
-   * Envoi d'un e-mail de notification officiel Agilly RHEVAL
+   * Envoi d'un e-mail de notification officiel PERFORMANCES
    * Tente en priorité Microsoft Graph si configuré, sinon SMTP, sinon log sécurisé.
    */
   async sendNotificationEmail(
@@ -44,8 +44,7 @@ export class MailService {
               <table width="100%" border="0" cellspacing="0" cellpadding="0">
                 <tr>
                   <td>
-                    <span style="font-size: 20px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px;">AGILLY</span>
-                    <span style="font-size: 11px; font-weight: 800; color: #F0822A; text-transform: uppercase; margin-left: 8px; letter-spacing: 1px;">RHEVAL</span>
+                    <span style="font-size: 20px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px;">PERFORMANCES</span>
                   </td>
                   <td align="right">
                     <span style="display: inline-block; font-size: 10px; font-weight: 800; text-transform: uppercase; background-color: #FFF7ED; color: #EA580C; border: 1px solid #FFEDD5; padding: 4px 10px;">Notification RH</span>
@@ -82,7 +81,7 @@ export class MailService {
           <!-- Pied de page -->
           <tr>
             <td style="padding: 20px 32px; background-color: #f8fafc; border-top: 1px solid #f1f5f9; text-align: center; font-size: 11px; color: #94a3b8;">
-              <p style="margin: 0 0 4px 0;">Ce message a été généré automatiquement par le <strong>Portail Agilly RHEVAL</strong>.</p>
+              <p style="margin: 0 0 4px 0;">Ce message a été généré automatiquement par le portail <strong>PERFORMANCES</strong>.</p>
               <p style="margin: 0;">Merci de ne pas répondre directement à cet e-mail.</p>
             </td>
           </tr>
@@ -101,7 +100,7 @@ export class MailService {
         await this.mailerService.sendMail({
           to,
           from: fromAddress,
-          subject: `[Agilly RHEVAL] ${titre}`,
+          subject: `[PERFORMANCES] ${titre}`,
           html: htmlContent,
         });
         this.logger.log(`[MailService/Brevo-SMTP] ✉️ E-mail envoyé avec succès via Brevo SMTP à : ${to}`);
@@ -186,7 +185,7 @@ export class MailService {
       const sendUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
       const mailBody = {
         message: {
-          subject: `[Agilly RHEVAL] ${subject}`,
+          subject: `[PERFORMANCES] ${subject}`,
           body: {
             contentType: 'HTML',
             content: htmlContent,

@@ -9,6 +9,15 @@ import { SoldesService } from "../soldes/soldes.service";
 import { DocumentsService } from "../documents/documents.service";
 import { NotificationsService } from "../../notifications/notifications.service";
 
+function isPrismaUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
+}
+
 @Injectable()
 export class DemandesService {
   private readonly logger = new Logger(DemandesService.name);
@@ -129,6 +138,63 @@ export class DemandesService {
       throw new NotFoundException(`Type de demande '${dto.typeCode}' inconnu.`);
     }
 
+    const isOrdreMission = dto.typeCode === "ORDRE_MISSION";
+    const isIntervention = dto.typeCode === "INTERVENTION_TERRAIN";
+    let ordreDonneA: { id_microsoft: string; nom: string; email: string | null } | null = null;
+    if (isOrdreMission) {
+      if (!dto.ordreDonneAId) {
+        throw new BadRequestException("Veuillez sélectionner le collaborateur destinataire de l'ordre de mission.");
+      }
+
+      ordreDonneA = await this.prismaShared.utilisateurs_cache.findUnique({
+        where: { id_microsoft: dto.ordreDonneAId },
+        select: { id_microsoft: true, nom: true, email: true },
+      });
+      if (!ordreDonneA) {
+        throw new NotFoundException("Le collaborateur sélectionné est introuvable dans l'annuaire.");
+      }
+    }
+
+    let equipeIntervention: { id: string; nom: string; email: string; poste?: string | null }[] = [];
+    if (isIntervention) {
+      const equipeIds = Array.from(new Set(dto.equipeInterventionIds ?? []));
+      if (equipeIds.length === 0) {
+        throw new BadRequestException("Veuillez ajouter au moins un intervenant à l'équipe.");
+      }
+      if (!dto.clientProjet?.trim()) {
+        throw new BadRequestException("Veuillez renseigner le client ou l'établissement.");
+      }
+      if (!dto.destination?.trim()) {
+        throw new BadRequestException("Veuillez renseigner le lieu de l'intervention.");
+      }
+      if (!dto.tarifInterventionJour || dto.tarifInterventionJour < 1) {
+        throw new BadRequestException("Veuillez renseigner un tarif journalier valide.");
+      }
+
+      const collaborateurs = await this.prismaShared.utilisateurs_cache.findMany({
+        where: { id_microsoft: { in: equipeIds } },
+        select: { id_microsoft: true, nom: true, email: true, poste: true },
+      });
+      if (collaborateurs.length !== equipeIds.length) {
+        throw new NotFoundException("Un ou plusieurs intervenants sont introuvables dans l'annuaire.");
+      }
+      const collaborateursParId = new Map(
+        collaborateurs.map((collaborateur) => [collaborateur.id_microsoft, collaborateur]),
+      );
+      equipeIntervention = equipeIds.map((id) => {
+        const collaborateur = collaborateursParId.get(id);
+        if (!collaborateur) {
+          throw new NotFoundException("Un intervenant sélectionné est introuvable dans l'annuaire.");
+        }
+        return {
+          id: collaborateur.id_microsoft,
+          nom: collaborateur.nom,
+          email: collaborateur.email ?? "",
+          poste: collaborateur.poste,
+        };
+      });
+    }
+
     // 3. Décompte des jours ouvrés
     const nombreJours = calculerNombreJoursOuvres(
       dDebut,
@@ -151,9 +217,6 @@ export class DemandesService {
       await this.soldesService.reserverJours(actualSalarieId, nombreJours, annee);
     }
 
-    // 6. Numérotation unique séquentielle
-    const numeroDemande = await this.documentsService.genererNumeroDemande(dDebut.getFullYear());
-
     // 6b. Étape initiale selon configuration du workflow du type de demande
     let statutInitial = StatutDemandeRH.EN_ATTENTE_N1;
     let etapeInitiale = 1;
@@ -171,34 +234,60 @@ export class DemandesService {
       }
     }
 
-    // 7. Enregistrement dans la base Demandes RH
-    const demande = await this.prismaDemandes.demandes_rh.create({
-      data: {
-        numeroDemande,
-        salarieId: actualSalarieId,
-        salarieNom: nomComplet,
-        salarieEmail: email,
-        salariePoste: poste,
-        salarieDirection: direction,
-        managerId,
-        typeId: typeDemande.id,
-        dateDebut: dDebut,
-        dateFin: dFin,
-        demiJourneeDebut: !!dto.demiJourneeDebut,
-        demiJourneeFin: !!dto.demiJourneeFin,
-        nombreJours,
-        motif: dto.motif,
-        destination: dto.destination || null,
-        moyenTransport: dto.moyenTransport || null,
-        fraisEstimes: dto.fraisEstimes || null,
-        statut: statutInitial,
-        etapeCourante: etapeInitiale,
-        cycleRejetCount: 0,
-      },
-      include: {
-        typeDemande: true,
-      },
-    });
+    // 7. Enregistrement et attribution des références uniques
+    const createDemandeWithUniqueNumbers = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const numeroDemande = await this.documentsService.genererNumeroDemande(dDebut.getFullYear());
+        const numeroOrdreMission = isOrdreMission
+          ? await this.documentsService.genererNumeroOrdreMission(dDebut.getFullYear())
+          : null;
+
+        try {
+          return await this.prismaDemandes.demandes_rh.create({
+            data: {
+              numeroDemande,
+              numeroOrdreMission,
+              ordreDonneAId: ordreDonneA?.id_microsoft ?? null,
+              ordreDonneANom: ordreDonneA?.nom ?? null,
+              ordreDonneAEmail: ordreDonneA?.email ?? null,
+              salarieId: actualSalarieId,
+              salarieNom: nomComplet,
+              salarieEmail: email,
+              salariePoste: poste,
+              salarieDirection: direction,
+              managerId,
+              typeId: typeDemande.id,
+              dateDebut: dDebut,
+              dateFin: dFin,
+              demiJourneeDebut: !!dto.demiJourneeDebut,
+              demiJourneeFin: !!dto.demiJourneeFin,
+              nombreJours,
+              motif: dto.motif,
+              destination: dto.destination || null,
+              moyenTransport: dto.moyenTransport || null,
+              fraisEstimes: dto.fraisEstimes || null,
+              clientProjet: dto.clientProjet || null,
+              tarifInterventionJour: dto.tarifInterventionJour || null,
+              equipeIntervention: equipeIntervention.length > 0 ? JSON.stringify(equipeIntervention) : null,
+              statut: statutInitial,
+              etapeCourante: etapeInitiale,
+              cycleRejetCount: 0,
+            },
+            include: {
+              typeDemande: true,
+            },
+          });
+        } catch (error) {
+          if (attempt === 2 || !isPrismaUniqueConstraintError(error)) {
+            throw error;
+          }
+        }
+      }
+
+      throw new Error("Impossible d'attribuer une référence unique à la demande.");
+    };
+
+    const demande = await createDemandeWithUniqueNumbers();
 
     // 8. Journal d'audit
     await this.prismaDemandes.historique_demande.create({
@@ -224,7 +313,9 @@ export class DemandesService {
     }
 
     DemandesService.clearAllDemandesCache();
-    this.logger.log(`[DemandesService] Demande ${numeroDemande} créée pour ${nomComplet} (${nombreJours} j)`);
+    this.logger.log(
+      `[DemandesService] Demande ${demande.numeroDemande} créée pour ${nomComplet} (${nombreJours} j)`
+    );
     return demande;
   }
 
