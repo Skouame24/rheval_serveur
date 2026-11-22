@@ -5,7 +5,7 @@ import { DecisionValidationDto } from "./dto/decision-validation.dto";
 import { StatutDemandeRH, DecisionValidation } from "../constants/statuts-demande.constant";
 import { SoldesService } from "../soldes/soldes.service";
 import { DocumentsService } from "../documents/documents.service";
-import { NotificationsService } from "../../notifications/notifications.service";
+import { NotificationsService, applicationDeCategorie } from "../../notifications/notifications.service";
 import { DelegationsService } from "./delegations.service";
 
 @Injectable()
@@ -152,6 +152,7 @@ export class ValidationsService {
           titre: `Demande RH transmise par le N+1 : ${demande.salarieNom || "Collaborateur"}`,
           message: `Demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) pour ${demande.salarieNom} en attente de vérification DRH.`,
           type: "ACTION",
+          application: applicationDeCategorie(demande.typeDemande?.categorie),
           lien: "/absences/validations",
         });
       }
@@ -160,6 +161,7 @@ export class ValidationsService {
         titre: `Avis favorable N+1 sur votre demande : ${demande.typeDemande.libelle}`,
         message: `Votre responsable N+1 a accordé un avis favorable à votre demande (${demande.nombreJours} j). Elle a été transmise à la DRH.`,
         type: "INFO",
+        application: applicationDeCategorie(demande.typeDemande?.categorie),
         lien: "/absences/demandes",
       });
     } else {
@@ -168,6 +170,7 @@ export class ValidationsService {
         titre: `Retour sur votre demande : ${dto.decision === DecisionValidation.REFUSE ? "Refusée" : "À corriger"}`,
         message: `Votre manager a formulé l'observation suivante : "${dto.motif}"`,
         type: "ALERTE",
+        application: applicationDeCategorie(demande.typeDemande?.categorie),
         lien: "/absences/demandes",
       });
     }
@@ -259,6 +262,7 @@ export class ValidationsService {
             titre: `Demande RH à valider (Direction) : ${demande.salarieNom || "Collaborateur"}`,
             message: `Demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) vérifiée par la DRH, soumise à votre validation.`,
             type: "ACTION",
+            application: applicationDeCategorie(demande.typeDemande?.categorie),
             lien: "/absences/validations",
           });
         }
@@ -268,6 +272,7 @@ export class ValidationsService {
           titre: `Demande RH validée par la DRH : ${demande.typeDemande.libelle}`,
           message: `Votre demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) a été validée avec succès.`,
           type: "INFO",
+          application: applicationDeCategorie(demande.typeDemande?.categorie),
           lien: "/absences/demandes",
         });
       }
@@ -278,6 +283,7 @@ export class ValidationsService {
           titre: `Retour DRH sur la demande de : ${demande.salarieNom}`,
           message: `La DRH a renvoyé le dossier avec l'observation : "${dto.motif}"`,
           type: "ALERTE",
+          application: applicationDeCategorie(demande.typeDemande?.categorie),
           lien: "/absences/validations",
         });
       }
@@ -360,6 +366,7 @@ export class ValidationsService {
         titre: dto.decision === DecisionValidation.APPROUVE ? `Demande approuvée par la DG : ${demande.salarieNom}` : `Demande retournée par la DG : ${demande.salarieNom}`,
         message: dto.decision === DecisionValidation.APPROUVE ? `Le titre d'absence de ${demande.salarieNom} peut être édité.` : `Motif DG : "${dto.motif}"`,
         type: "INFO",
+        application: applicationDeCategorie(demande.typeDemande?.categorie),
         lien: "/absences/validations",
       });
     }
@@ -370,6 +377,7 @@ export class ValidationsService {
         titre: `Demande approuvée par la Direction Générale : ${demande.typeDemande.libelle}`,
         message: `Votre demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) a été définitivement approuvée par la Direction Générale. Votre document officiel A4 est disponible.`,
         type: "VALIDATION",
+        application: applicationDeCategorie(demande.typeDemande?.categorie),
         lien: "/absences/demandes",
       });
     } else {
@@ -378,6 +386,7 @@ export class ValidationsService {
         titre: `Demande retournée par la Direction Générale : ${demande.typeDemande.libelle}`,
         message: `La Direction Générale a formulé une observation sur votre dossier : "${dto.motif}"`,
         type: "ALERTE",
+        application: applicationDeCategorie(demande.typeDemande?.categorie),
         lien: "/absences/demandes",
       });
     }
@@ -440,6 +449,7 @@ export class ValidationsService {
       titre: `Votre titre d'absence est disponible (${numeroTitre})`,
       message: `Votre demande de ${demande.typeDemande.libelle} (${demande.nombreJours} j) a été officiellement approuvée et scellée.`,
       type: "INFO",
+      application: applicationDeCategorie(demande.typeDemande?.categorie),
       lien: "/absences/demandes",
     });
 

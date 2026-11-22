@@ -190,6 +190,8 @@ model notifications {
   titre      String
   message    String
   type       String   @default("INFO") // INFO, ACTION, VALIDATION, ALERTE
+  /// Application émettrice : rheval, absences, missions, caisse, portail…
+  application String  @default("rheval")
   lu         Boolean  @default(false)
   lien       String?
   ficheId    String?
@@ -199,5 +201,6 @@ model notifications {
   utilisateurs_cache utilisateurs_cache @relation(fields: [userId], references: [id_microsoft], onDelete: Cascade)
 
   @@index([userId, lu])
+  @@index([userId, application, lu])
   @@index([createdAt])
 }

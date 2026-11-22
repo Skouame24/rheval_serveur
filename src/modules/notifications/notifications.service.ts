@@ -2,14 +2,45 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 
+/** Applications de l'écosystème Agilly qui émettent des notifications */
+export const APPLICATIONS_NOTIF = ['rheval', 'absences', 'missions', 'caisse', 'portail'] as const;
+export type ApplicationNotif = (typeof APPLICATIONS_NOTIF)[number];
+
 export interface CreateNotificationDto {
   userId: string;
   titre: string;
   message: string;
   type?: 'INFO' | 'ACTION' | 'VALIDATION' | 'ALERTE';
+  /** Application émettrice. Si absente, déduite du lien (compatibilité des anciens appels). */
+  application?: ApplicationNotif;
   lien?: string;
   ficheId?: string;
   sendEmail?: boolean;
+}
+
+/** Règle de compatibilité pour les appels qui ne précisent pas encore l'application. */
+export function deduireApplication(lien?: string | null): ApplicationNotif {
+  if (!lien) return 'rheval';
+  if (lien.startsWith('/absences/missions') || lien.startsWith('/absences/interventions')) return 'missions';
+  if (lien.startsWith('/absences')) return 'absences';
+  if (lien.startsWith('/caisse')) return 'caisse';
+  if (lien.startsWith('/portail')) return 'portail';
+  return 'rheval';
+}
+
+/** Catégorie de type de demande (CONGE, MISSION, INTERVENTION…) → application */
+export function applicationDeCategorie(categorie?: string | null): ApplicationNotif {
+  return categorie === 'MISSION' || categorie === 'INTERVENTION' ? 'missions' : 'absences';
+}
+
+/** "absences,missions" → ['absences', 'missions'] (valeurs inconnues ignorées) */
+export function lireApplications(valeur?: string): ApplicationNotif[] | undefined {
+  if (!valeur) return undefined;
+  const liste = valeur
+    .split(',')
+    .map((v) => v.trim().toLowerCase())
+    .filter((v): v is ApplicationNotif => (APPLICATIONS_NOTIF as readonly string[]).includes(v));
+  return liste.length > 0 ? liste : undefined;
 }
 
 @Injectable()
@@ -38,6 +69,7 @@ export class NotificationsService {
           titre: dto.titre,
           message: dto.message,
           type: dto.type || 'INFO',
+          application: dto.application ?? deduireApplication(dto.lien),
           lien: dto.lien || '/dashboard/mon-espace',
           ficheId: dto.ficheId || null,
         },
@@ -119,69 +151,73 @@ export class NotificationsService {
     return candidates;
   }
 
+  /** Filtre commun : notifications de l'utilisateur, éventuellement limitées à certaines applications */
+  private async filtre(userId: string, applications?: ApplicationNotif[]) {
+    const userIds = await this.resolveUserId(userId);
+    return {
+      userId: { in: userIds },
+      ...(applications ? { application: { in: applications } } : {}),
+    };
+  }
+
   /**
-   * Récupère la liste des notifications réelles de l'utilisateur connecté
+   * Récupère les notifications de l'utilisateur connecté (toutes applications, ou filtrées)
    */
-  async getMyNotifications(userId?: string, limit = 50) {
+  async getMyNotifications(userId?: string, limit = 50, applications?: ApplicationNotif[]) {
     if (!userId) return [];
-    const userIds = await this.resolveUserId(userId);
-
     return this.prisma.notifications.findMany({
-      where: {
-        userId: { in: userIds },
-      },
+      where: await this.filtre(userId, applications),
       orderBy: { createdAt: 'desc' },
-      take: limit,
+      take: Math.min(Math.max(limit, 1), 200),
     });
   }
 
   /**
-   * Compte en direct le nombre de notifications non lues (pour la cloche du Header)
+   * Nombre de notifications non lues (cloche), éventuellement par application
    */
-  async getUnreadCount(userId?: string): Promise<number> {
+  async getUnreadCount(userId?: string, applications?: ApplicationNotif[]): Promise<number> {
     if (!userId) return 0;
-    const userIds = await this.resolveUserId(userId);
-
     return this.prisma.notifications.count({
-      where: {
-        userId: { in: userIds },
-        lu: false,
-      },
+      where: { ...(await this.filtre(userId, applications)), lu: false },
     });
   }
 
   /**
-   * Marque une notification spécifique comme lue
+   * Non lues par application (badges du portail) : { rheval: 2, absences: 1, … }
    */
-  async markAsRead(id: string, userId?: string) {
-    if (!id) return;
-
-    return this.prisma.notifications.updateMany({
-      where: {
-        id,
-      },
-      data: {
-        lu: true,
-      },
+  async getUnreadSummary(userId?: string): Promise<Record<string, number>> {
+    if (!userId) return {};
+    const groupes = await this.prisma.notifications.groupBy({
+      by: ['application'],
+      where: { ...(await this.filtre(userId)), lu: false },
+      _count: { _all: true },
     });
+    return Object.fromEntries(groupes.map((g) => [g.application, g._count._all]));
   }
 
   /**
-   * Marque toutes les notifications non lues de l'utilisateur comme lues
+   * Marque une notification comme lue — uniquement si elle appartient à l'utilisateur
    */
-  async markAllAsRead(userId?: string) {
-    if (!userId) return;
-    const userIds = await this.resolveUserId(userId);
-
-    return this.prisma.notifications.updateMany({
-      where: {
-        userId: { in: userIds },
-        lu: false,
-      },
-      data: {
-        lu: true,
-      },
+  async markAsRead(id: string, userId?: string): Promise<number> {
+    if (!id || !userId) return 0;
+    const res = await this.prisma.notifications.updateMany({
+      where: { id, ...(await this.filtre(userId)) },
+      data: { lu: true },
     });
+    return res.count;
+  }
+
+  /**
+   * Marque comme lues les notifications de l'utilisateur.
+   * Avec `applications`, seules celles de ces applications sont concernées
+   * (évite qu'une cloche d'application efface les notifications des autres).
+   */
+  async markAllAsRead(userId?: string, applications?: ApplicationNotif[]): Promise<number> {
+    if (!userId) return 0;
+    const res = await this.prisma.notifications.updateMany({
+      where: { ...(await this.filtre(userId, applications)), lu: false },
+      data: { lu: true },
+    });
+    return res.count;
   }
 }
-
