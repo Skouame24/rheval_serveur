@@ -8,6 +8,8 @@ import { calculerNombreJoursOuvres } from "../utils/date-calcul.util";
 import { SoldesService } from "../soldes/soldes.service";
 import { DocumentsService } from "../documents/documents.service";
 import { NotificationsService, applicationDeCategorie, lienDemandesRh } from "../../notifications/notifications.service";
+import { DelegationsService } from "../validations/delegations.service";
+import type { UtilisateurAuth } from "../../../common/auth/auth.constants";
 
 @Injectable()
 export class DemandesService {
@@ -23,7 +25,8 @@ export class DemandesService {
     private readonly prismaShared: PrismaService,
     private readonly soldesService: SoldesService,
     private readonly documentsService: DocumentsService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly delegationsService: DelegationsService
   ) {}
 
   async getTypesDemande() {
@@ -283,6 +286,38 @@ export class DemandesService {
     });
     DemandesService.cachedAllDemandes = { data, timestamp: Date.now() };
     return data;
+  }
+
+  /**
+   * Règle de visibilité des demandes (congés, maladie, missions…) :
+   * - RH, DRH, ADMIN, Direction (N2) et PDG : toutes ;
+   * - les autres : les leurs, celles de leurs collaborateurs directs et
+   *   celles des équipes dont ils assurent l'intérim.
+   * Renvoie null quand tout est visible.
+   */
+  private async filtreVisibilite(u: UtilisateurAuth): Promise<((d: any) => boolean) | null> {
+    if (u.pdg || ["RH", "DRH", "ADMIN", "N2"].includes(u.role)) return null;
+    const moi = [u.id, u.email].filter(Boolean).map((x) => x.toLowerCase());
+    const delegations = await this.delegationsService.getActiveDelegationsForInterim(u.id);
+    const managers = new Set([...moi, ...delegations.map((d) => (d.managerId || "").toLowerCase())]);
+    return (d: any) =>
+      moi.includes((d.salarieId || "").toLowerCase()) ||
+      moi.includes((d.salarieEmail || "").toLowerCase()) ||
+      managers.has((d.managerId || "").toLowerCase());
+  }
+
+  async getDemandesVisibles(u: UtilisateurAuth) {
+    const toutes = await this.getAllDemandes();
+    const filtre = await this.filtreVisibilite(u);
+    return filtre ? toutes.filter(filtre) : toutes;
+  }
+
+  async getDemandeVisible(id: string, u: UtilisateurAuth) {
+    const demande = await this.getDemandeById(id);
+    const filtre = await this.filtreVisibilite(u);
+    // 404 plutôt que 403 : ne pas révéler l'existence de la demande
+    if (filtre && !filtre(demande)) throw new NotFoundException(`Demande #${id} introuvable.`);
+    return demande;
   }
 
   async getDemandeById(id: string) {

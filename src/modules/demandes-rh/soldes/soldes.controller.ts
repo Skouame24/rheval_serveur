@@ -1,6 +1,8 @@
 import { Controller, Get, Put, Body, Param, Query, Headers, UseGuards } from "@nestjs/common";
 import { SoldesService } from "./soldes.service";
 import { AjusterSoldeDto } from "./dto/ajuster-solde.dto";
+import { Roles } from "../../../common/auth/auth.decorators";
+import { ROLES_PILOTAGE_RH } from "../../../common/auth/auth.constants";
 
 @Controller("soldes-conges")
 export class SoldesController {
@@ -12,9 +14,10 @@ export class SoldesController {
     @Query("annee") annee?: string
   ) {
     const anneeNum = annee ? parseInt(annee, 10) : 2026;
-    return this.soldesService.getSoldeSalarie(userId || "0a5c4c64-abdd-4f4f-a3af-00057ebdddfb", anneeNum);
+    return this.soldesService.getSoldeSalarie((userId as string), anneeNum);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Get("collaborateur/:salarieId")
   async getSoldeSalarie(
     @Param("salarieId") salarieId: string,
@@ -24,12 +27,14 @@ export class SoldesController {
     return this.soldesService.getSoldeSalarie(salarieId, anneeNum);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Get("tous")
   async getAllSoldes(@Query("annee") annee?: string) {
     const anneeNum = annee ? parseInt(annee, 10) : 2026;
     return this.soldesService.getAllSoldes(anneeNum);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Put("collaborateur/:salarieId/ajuster")
   async ajusterSolde(
     @Param("salarieId") salarieId: string,
@@ -38,7 +43,7 @@ export class SoldesController {
     @Query("annee") annee?: string
   ) {
     const anneeNum = annee ? parseInt(annee, 10) : 2026;
-    return this.soldesService.ajusterSolde(salarieId, dto, drhId || "c970e84d-5fd5-4cb9-8c4e-7cccc14ad269", anneeNum);
+    return this.soldesService.ajusterSolde(salarieId, dto, (drhId as string), anneeNum);
   }
 }
 

@@ -3,6 +3,8 @@ import { DemandesService } from "./demandes.service";
 import { CreateDemandeDto } from "./dto/create-demande.dto";
 import { UpdateTypeWorkflowDto } from "./dto/update-type-workflow.dto";
 import { MissionsReferentielService } from "../missions/missions-referentiel.service";
+import { Roles, UtilisateurCourant } from "../../../common/auth/auth.decorators";
+import { ROLES_PILOTAGE_RH, type UtilisateurAuth } from "../../../common/auth/auth.constants";
 
 export class CalculFraisMissionDto {
   villeId: string;
@@ -47,6 +49,7 @@ export class DemandesController {
     return this.demandesService.getTypesDemande();
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Put("types/:id")
   async updateTypeWorkflow(
     @Param("id") id: string,
@@ -60,24 +63,24 @@ export class DemandesController {
     @Body() dto: CreateDemandeDto,
     @Headers("x-user-id") userId?: string
   ) {
-    const salarieId = userId || "0a5c4c64-abdd-4f4f-a3af-00057ebdddfb"; // Samuel par défaut
-    return this.demandesService.createDemande(salarieId, dto);
+    // userId est toujours fourni par le garde (identité vérifiée)
+    return this.demandesService.createDemande(userId as string, dto);
   }
 
   @Get("mes-demandes")
   async getMesDemandes(@Headers("x-user-id") userId?: string) {
-    const salarieId = userId || "0a5c4c64-abdd-4f4f-a3af-00057ebdddfb";
-    return this.demandesService.getMesDemandes(salarieId);
+    return this.demandesService.getMesDemandes(userId as string);
   }
 
+  /** Demandes visibles : toutes pour RH/DRH/Direction/PDG, sinon les siennes + celles de son équipe */
   @Get()
-  async getAllDemandes() {
-    return this.demandesService.getAllDemandes();
+  async getAllDemandes(@UtilisateurCourant() u: UtilisateurAuth) {
+    return this.demandesService.getDemandesVisibles(u);
   }
 
   @Get(":id")
-  async getDemandeById(@Param("id") id: string) {
-    return this.demandesService.getDemandeById(id);
+  async getDemandeById(@Param("id") id: string, @UtilisateurCourant() u: UtilisateurAuth) {
+    return this.demandesService.getDemandeVisible(id, u);
   }
 
   @Put(":id/annuler")
@@ -85,7 +88,6 @@ export class DemandesController {
     @Param("id") id: string,
     @Headers("x-user-id") userId?: string
   ) {
-    const salarieId = userId || "0a5c4c64-abdd-4f4f-a3af-00057ebdddfb";
-    return this.demandesService.annulerDemande(id, salarieId);
+    return this.demandesService.annulerDemande(id, userId as string);
   }
 }

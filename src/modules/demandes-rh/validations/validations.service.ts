@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException, Logger, ForbiddenException } from "@nestjs/common";
 import { PrismaDemandesService } from "../../../prisma-demandes/prisma-demandes.service";
 import { PrismaService } from "../../../prisma/prisma.service";
 import { DecisionValidationDto } from "./dto/decision-validation.dto";
@@ -22,7 +22,7 @@ export class ValidationsService {
   ) {}
 
   // ── 1. VALIDATION PAR LE SUPÉRIEUR DIRECT (N+1) ─────────────
-  async validerN1(demandeId: string, valideurId: string, dto: DecisionValidationDto) {
+  async validerN1(demandeId: string, valideurId: string, dto: DecisionValidationDto, toutPouvoir = false) {
     const demande = await this.prismaDemandes.demandes_rh.findUnique({
       where: { id: demandeId },
       include: { typeDemande: true },
@@ -62,6 +62,10 @@ export class ValidationsService {
         });
         delegantNom = delegant?.nom || 'Responsable N+1';
       }
+    }
+
+    if (!isDirect && !isInterim && !toutPouvoir) {
+      throw new ForbiddenException("Seul le responsable N+1 de ce collaborateur (ou son intérimaire) peut se prononcer sur cette demande.");
     }
 
     const nomValideurFinal = isInterim
