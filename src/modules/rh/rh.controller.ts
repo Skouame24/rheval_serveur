@@ -13,11 +13,14 @@ import {
 } from '@nestjs/common';
 import { RhService } from './rh.service';
 import type { Response } from 'express';
+import { Roles } from '../../common/auth/auth.decorators';
+import { ROLES_ADMIN, ROLES_PILOTAGE_RH } from '../../common/auth/auth.constants';
 
 @Controller('rh')
 export class RhController {
   constructor(private readonly rhService: RhService) {}
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Get('dashboard/stats')
   async getDashboardStats() {
     return this.rhService.getDashboardStats();
@@ -35,6 +38,7 @@ export class RhController {
     return this.rhService.getCycleActif();
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Post('cycles')
   async creerCycle(
     @Body() body: { annee: number; libelle: string; dateDebut: string; dateFin: string },
@@ -53,6 +57,7 @@ export class RhController {
     }
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Put('cycles/:id/cloturer')
   async cloturerCycle(@Param('id') id: string) {
     try {
@@ -68,11 +73,13 @@ export class RhController {
 
   // ── Arbitrages ──────────────────────────────────────────────
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Get('arbitrages')
   async getArbitrages() {
     return this.rhService.getArbitrages();
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Post('arbitrages/:id/resolve')
   async resolveArbitrage(
     @Param('id') id: string,
@@ -81,6 +88,7 @@ export class RhController {
     return this.rhService.resolveArbitrage(id, body);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Get('bonus/resultats')
   async getBonusResultats(@Query('cycleId') cycleId?: string) {
     return this.rhService.getBonusResultats(cycleId);
@@ -91,6 +99,7 @@ export class RhController {
     return this.rhService.getBaremeActif();
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Get('export/excel')
   async exportExcel(@Query('cycleId') cycleId: string, @Res() res: Response) {
     return this.rhService.exportExcel(cycleId, res);

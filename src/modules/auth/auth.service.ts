@@ -1,18 +1,15 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { JwtService } from '@nestjs/jwt';
 import { mapUserToDto } from '../../common/user.mapper';
-import { KNOWN_AGILLY_DIRECTORY } from '../../common/directory.constants';
+import type { UtilisateurAuth } from '../../common/auth/auth.constants';
+import { invaliderCacheAuth } from '../../common/auth/auth.guard';
 
 @Injectable()
 export class AuthService {
   private cachedDrhUser: any = null;
   private lastDrhFetch = 0;
 
-  constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   private async getDrhUser() {
     const now = Date.now();
@@ -27,17 +24,36 @@ export class AuthService {
     return this.cachedDrhUser;
   }
 
-  async syncSession(data: {
-    id_microsoft: string;
-    nom: string;
-    prenom?: string;
-    email: string;
-    poste?: string;
-    departement?: string;
-    telephone?: string;
-    role?: string;
-    managerId?: string;
-  }) {
+  /**
+   * Synchronise le profil Microsoft de l'utilisateur connecté.
+   * - L'identité (id_microsoft, e-mail) vient du jeton vérifié, jamais du corps.
+   * - Le rôle n'est jamais pris dans le corps : à la création, on utilise le rôle
+   *   calculé par le SSO côté serveur du portail ; ensuite, la base fait foi.
+   */
+  async syncSession(
+    body: {
+      nom?: string;
+      prenom?: string;
+      poste?: string;
+      departement?: string;
+      telephone?: string;
+      managerId?: string;
+    },
+    utilisateur: UtilisateurAuth,
+  ) {
+    // En simulation de profil, on ne réécrit jamais le compte simulé
+    if (utilisateur.simule) {
+      const simule = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: utilisateur.id } });
+      return { success: true, message: 'Simulation : aucune synchronisation', user: simule ? mapUserToDto(simule) : null };
+    }
+
+    const data = {
+      ...body,
+      nom: body.nom || utilisateur.nom || utilisateur.email.split('@')[0],
+      id_microsoft: utilisateur.id,
+      email: utilisateur.email,
+      role: utilisateur.roleSso,
+    };
     const fullName = `${data.prenom ? data.prenom + ' ' : ''}${data.nom}`.trim();
 
     let user = await this.prisma.utilisateurs_cache.findUnique({
@@ -50,6 +66,7 @@ export class AuthService {
       });
     }
 
+    let modifie = false;
     if (user) {
       // Éviter les écritures SQL inutiles si les données n'ont pas changé (accélère considérablement les requêtes)
       const needsUpdate =
@@ -62,6 +79,7 @@ export class AuthService {
         (!user.managerId && data.managerId);
 
       if (needsUpdate) {
+        modifie = true;
         user = await this.prisma.utilisateurs_cache.update({
           where: { id_microsoft: user.id_microsoft },
           data: {
@@ -77,6 +95,7 @@ export class AuthService {
         });
       }
     } else {
+      modifie = true;
       user = await this.prisma.utilisateurs_cache.create({
         data: {
           id_microsoft: data.id_microsoft,
@@ -91,6 +110,9 @@ export class AuthService {
         },
       });
     }
+
+    // Le garde relira le compte à jour au prochain appel
+    if (modifie) invaliderCacheAuth();
 
     // Récupération en parallèle N1 + DRH (divise le temps d'attente réseau par 2)
     const [n1User, drhUser] = await Promise.all([
@@ -113,74 +135,6 @@ export class AuthService {
       success: true,
       message: 'Session synchronisée avec succès',
       user: mapUserToDto(user, n1User, n2User, drhUser),
-    };
-  }
-
-  async login(email: string) {
-    let user = await this.prisma.utilisateurs_cache.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
-    });
-
-    if (!user) {
-      // Déterminer le rôle par défaut selon l'email démo
-      let defaultRole = 'SALARIE';
-      if (email.includes('rh')) defaultRole = 'RH';
-      else if (email.includes('n2')) defaultRole = 'N2';
-      else if (email.includes('n1')) defaultRole = 'N1';
-      else if (email.includes('admin')) defaultRole = 'ADMIN';
-
-      user = await this.prisma.utilisateurs_cache.create({
-        data: {
-          id_microsoft: 'usr-' + Date.now(),
-          nom: email.split('@')[0].toUpperCase(),
-          email: email,
-          role: defaultRole,
-          poste: `Poste ${defaultRole}`,
-          departement: 'Direction Agilly',
-          updatedAt: new Date(),
-        },
-      });
-    }
-
-    let n1User = null;
-    let n2User = null;
-    if (user.managerId) {
-      n1User = await this.prisma.utilisateurs_cache.findUnique({
-        where: { id_microsoft: user.managerId },
-      });
-      if (n1User?.managerId) {
-        n2User = await this.prisma.utilisateurs_cache.findUnique({
-          where: { id_microsoft: n1User.managerId },
-        });
-      }
-    }
-
-    const drhUser = await this.prisma.utilisateurs_cache.findFirst({
-      where: { role: 'DRH' },
-    });
-
-    const payload = { sub: user.id_microsoft, email: user.email, role: user.role };
-    const token = this.jwtService.sign(payload);
-
-    return {
-      access_token: token,
-      user: mapUserToDto(user, n1User, n2User, drhUser),
-    };
-  }
-
-  async loginAzureAd(accessToken?: string) {
-    // Si un token Azure AD est fourni, on peut récupérer le premier user ou valider
-    const user = await this.prisma.utilisateurs_cache.findFirst();
-    if (!user) {
-      throw new UnauthorizedException('Aucun utilisateur configuré');
-    }
-
-    const payload = { sub: user.id_microsoft, email: user.email, role: user.role };
-    const token = this.jwtService.sign(payload);
-
-    return {
-      access_token: token,
-      user: mapUserToDto(user),
     };
   }
 }

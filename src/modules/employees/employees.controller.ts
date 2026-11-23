@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, Headers } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
+import { Roles } from '../../common/auth/auth.decorators';
+import { ROLES_ADMIN, ROLES_PILOTAGE_RH } from '../../common/auth/auth.constants';
 
 @Controller()
 export class EmployeesController {
@@ -48,6 +50,7 @@ export class EmployeesController {
     return this.employeesService.getAllUsers();
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Post('admin/sync-entra-directory')
   async syncEntraDirectory() {
     return this.employeesService.syncEntraDirectory();

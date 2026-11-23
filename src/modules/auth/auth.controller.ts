@@ -1,22 +1,20 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { UtilisateurCourant } from '../../common/auth/auth.decorators';
+import type { UtilisateurAuth } from '../../common/auth/auth.constants';
 
+/**
+ * L'authentification se fait par le SSO Microsoft côté portail.
+ * Les anciennes routes /auth/login (sans mot de passe) et /auth/azure-ad
+ * (qui renvoyait le premier compte venu) ont été supprimées.
+ */
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  /** Synchronise le profil Microsoft de l'utilisateur CONNECTÉ (identité issue du jeton) */
   @Post('sync-session')
-  async syncSession(@Body() body: any) {
-    return this.authService.syncSession(body);
-  }
-
-  @Post('login')
-  async login(@Body() body: { email: string; password?: string }) {
-    return this.authService.login(body.email);
-  }
-
-  @Post('azure-ad')
-  async loginAzureAd(@Body() body: { accessToken?: string }) {
-    return this.authService.loginAzureAd(body.accessToken);
+  async syncSession(@Body() body: any, @UtilisateurCourant() utilisateur: UtilisateurAuth) {
+    return this.authService.syncSession(body ?? {}, utilisateur);
   }
 }

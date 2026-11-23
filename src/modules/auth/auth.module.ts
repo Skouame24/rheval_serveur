@@ -1,17 +1,24 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthGuard } from '../../common/auth/auth.guard';
+import { secretApi } from '../../common/auth/auth.constants';
 
 @Module({
   imports: [
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'agilly_rheval_super_secret_jwt_key_2026',
-      signOptions: { expiresIn: '7d' },
+    // Secret obligatoire : l'API refuse de démarrer sans AGILLY_API_SECRET
+    JwtModule.registerAsync({
+      useFactory: () => ({ secret: secretApi() }),
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [
+    AuthService,
+    // Garde global : toutes les routes exigent un jeton signé par le portail (sauf @Public)
+    { provide: APP_GUARD, useClass: AuthGuard },
+  ],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

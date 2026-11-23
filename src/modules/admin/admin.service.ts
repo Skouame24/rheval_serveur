@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mapUserToDto } from '../../common/user.mapper';
+import { invaliderCacheAuth } from '../../common/auth/auth.guard';
 
 @Injectable()
 export class AdminService {
@@ -64,6 +65,7 @@ export class AdminService {
       },
     });
 
+    invaliderCacheAuth(); // rôle modifié : pris en compte immédiatement
     return mapUserToDto(updated);
   }
 
@@ -80,6 +82,7 @@ export class AdminService {
       where: { id_microsoft: id },
     });
 
+    invaliderCacheAuth();
     return { success: true };
   }
 

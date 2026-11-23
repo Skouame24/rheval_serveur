@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, Headers } from '@nestjs/common';
 import { EvaluationsService } from './evaluations.service';
 import { EvaluationsCronService } from './evaluations-cron.service';
+import { Roles } from '../../common/auth/auth.decorators';
+import { ROLES_ADMIN, ROLES_PILOTAGE_RH } from '../../common/auth/auth.constants';
 
 @Controller()
 export class EvaluationsController {
@@ -93,6 +95,7 @@ export class EvaluationsController {
     return this.evaluationsService.submitObjectifsN1(id, body, managerId);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Put('rh/evaluations/:id/objectifs')
   async validateObjectifsRh(
     @Param('id') id: string,
@@ -137,6 +140,7 @@ export class EvaluationsController {
     return this.evaluationsService.getN2TeamEvaluations(n2Id, userEmail);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Put('rh/evaluations/:id/valider')
   async validerParRh(
     @Param('id') id: string,
@@ -146,6 +150,7 @@ export class EvaluationsController {
     return this.evaluationsService.validerParRh(id, body, rhId);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH, 'N2')
   @Get('rh/evaluations')
   async getAllForRh() {
     return this.evaluationsService.getAllForRh();
@@ -159,6 +164,7 @@ export class EvaluationsController {
     return this.evaluationsService.getN1TeamEvaluations(managerId, userEmail);
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Post('evaluations/relances/execute')
   async triggerRelances(@Body() body?: { seuilJours?: number }) {
     const seuil = body?.seuilJours ?? 5;

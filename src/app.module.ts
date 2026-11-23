@@ -10,6 +10,7 @@ import { RhModule } from './modules/rh/rh.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MailModule } from './modules/mail/mail.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AppController } from './app.controller';
 import { DemandesRhModule } from './modules/demandes-rh/demandes-rh.module';
 
 @Module({
@@ -27,5 +28,6 @@ import { DemandesRhModule } from './modules/demandes-rh/demandes-rh.module';
     NotificationsModule,
     DemandesRhModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}

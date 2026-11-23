@@ -10,6 +10,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { CyclesService } from './cycles.service';
+import { Roles } from '../../common/auth/auth.decorators';
+import { ROLES_ADMIN, ROLES_PILOTAGE_RH } from '../../common/auth/auth.constants';
 
 @Controller('rh/cycles')
 export class CyclesController {
@@ -25,6 +27,7 @@ export class CyclesController {
     return this.cyclesService.getActif();
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Post()
   async create(@Body() body: any, @Headers('x-user-id') userId?: string) {
     try {
@@ -45,6 +48,7 @@ export class CyclesController {
     }
   }
 
+  @Roles(...ROLES_PILOTAGE_RH)
   @Put(':id/cloturer')
   async cloturer(@Param('id') id: string) {
     return this.cyclesService.cloturer(id);
