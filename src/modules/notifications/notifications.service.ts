@@ -33,6 +33,11 @@ export function applicationDeCategorie(categorie?: string | null): ApplicationNo
   return categorie === 'MISSION' || categorie === 'INTERVENTION' ? 'missions' : 'absences';
 }
 
+/** Lien vers la bonne page selon l'univers de la demande (missions vs congés) */
+export function lienDemandesRh(categorie: string | null | undefined, page: 'validations' | 'demandes'): string {
+  return applicationDeCategorie(categorie) === 'missions' ? `/absences/missions/${page}` : `/absences/${page}`;
+}
+
 /** "absences,missions" → ['absences', 'missions'] (valeurs inconnues ignorées) */
 export function lireApplications(valeur?: string): ApplicationNotif[] | undefined {
   if (!valeur) return undefined;

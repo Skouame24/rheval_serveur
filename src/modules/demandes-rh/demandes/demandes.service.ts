@@ -7,7 +7,7 @@ import { StatutDemandeRH } from "../constants/statuts-demande.constant";
 import { calculerNombreJoursOuvres } from "../utils/date-calcul.util";
 import { SoldesService } from "../soldes/soldes.service";
 import { DocumentsService } from "../documents/documents.service";
-import { NotificationsService, applicationDeCategorie } from "../../notifications/notifications.service";
+import { NotificationsService, applicationDeCategorie, lienDemandesRh } from "../../notifications/notifications.service";
 
 @Injectable()
 export class DemandesService {
@@ -220,7 +220,7 @@ export class DemandesService {
         message: `${nomComplet} a soumis une demande de ${typeDemande.libelle} (${nombreJours} j) du ${dDebut.toLocaleDateString("fr-FR")} au ${dFin.toLocaleDateString("fr-FR")}.`,
         type: "ACTION",
         application: applicationDeCategorie(typeDemande.categorie),
-        lien: "/absences/validations",
+        lien: lienDemandesRh(typeDemande.categorie, "validations"),
       });
     }
 
