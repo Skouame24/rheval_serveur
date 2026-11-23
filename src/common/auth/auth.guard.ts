@@ -25,6 +25,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   JETON_AUDIENCE,
   JETON_ISSUER,
+  estPdg,
   secretApi,
   simulationAutorisee,
   type UtilisateurAuth,
@@ -45,6 +46,7 @@ interface CompteBase {
   email: string | null;
   role: string | null;
   nom: string | null;
+  poste: string | null;
 }
 
 const DUREE_CACHE_MS = 60_000;
@@ -111,7 +113,8 @@ export class AuthGuard implements CanActivate {
     if (utilisateur.email) req.headers['x-user-email'] = utilisateur.email;
 
     const roles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, cibles);
-    if (roles?.length && !roles.includes(utilisateur.role)) {
+    // Le PDG a tous les droits
+    if (roles?.length && !utilisateur.pdg && !roles.includes(utilisateur.role)) {
       throw new ForbiddenException("Vous n'avez pas les droits pour cette action");
     }
     return true;
@@ -143,6 +146,7 @@ export class AuthGuard implements CanActivate {
       role: compte?.role || 'SALARIE',
       roleSso,
       nom: compte?.nom ?? nom,
+      pdg: estPdg(compte?.poste, compte?.email ?? email),
     };
   }
 
@@ -152,7 +156,7 @@ export class AuthGuard implements CanActivate {
     const enCache = cache.get(cle);
     if (enCache && enCache.expire > Date.now()) return enCache.compte;
 
-    const select = { id_microsoft: true, email: true, role: true, nom: true } as const;
+    const select = { id_microsoft: true, email: true, role: true, nom: true, poste: true } as const;
     let compte: CompteBase | null = await this.prisma.utilisateurs_cache.findUnique({
       where: { id_microsoft: sub },
       select,

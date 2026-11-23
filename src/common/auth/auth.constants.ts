@@ -28,6 +28,25 @@ export function secretApi(): string {
   return secret;
 }
 
+/**
+ * Le PDG a tous les droits : aucune restriction @Roles ne s'applique à lui.
+ * Reconnu par son intitulé de poste (PDG, Directeur·rice Général·e, DG, CEO,
+ * Président·e — hors adjoints et vice-présidents) ou par son e-mail listé
+ * dans EMAILS_PDG (séparés par des virgules).
+ */
+const MOTIF_PDG = /\b(pdg|p\.d\.g|dg|ceo)\b|directeur g[ée]n[ée]ral|directrice g[ée]n[ée]rale|(^|[^a-z])pr[ée]sident/i;
+const MOTIF_PAS_PDG = /adjoint|vice/i;
+
+export function estPdg(poste?: string | null, email?: string | null): boolean {
+  const emails = (process.env.EMAILS_PDG ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  if (email && emails.includes(email.toLowerCase())) return true;
+  const p = poste ?? '';
+  return MOTIF_PDG.test(p) && !MOTIF_PAS_PDG.test(p);
+}
+
 /** Mode « simulateur de profils » : jamais en production. */
 export const simulationAutorisee = (): boolean => process.env.AUTORISER_SIMULATION === 'true';
 
@@ -43,4 +62,6 @@ export interface UtilisateurAuth {
   nom?: string;
   /** true si un administrateur simule ce profil (environnement de test uniquement) */
   simule?: boolean;
+  /** PDG : tous les droits */
+  pdg?: boolean;
 }
