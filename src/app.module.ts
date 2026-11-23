@@ -11,6 +11,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { MailModule } from './modules/mail/mail.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AppController } from './app.controller';
+import { PortailModule } from './modules/portail/portail.module';
 import { DemandesRhModule } from './modules/demandes-rh/demandes-rh.module';
 
 @Module({
@@ -27,6 +28,7 @@ import { DemandesRhModule } from './modules/demandes-rh/demandes-rh.module';
     MailModule,
     NotificationsModule,
     DemandesRhModule,
+    PortailModule,
   ],
   controllers: [AppController],
 })

@@ -1,4 +1,6 @@
-import { Controller, Get, Patch, Post, Param, Headers, Query } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Put, Param, Headers, Query } from '@nestjs/common';
+import { UtilisateurCourant } from '../../common/auth/auth.decorators';
+import type { UtilisateurAuth } from '../../common/auth/auth.constants';
 import { NotificationsService, lireApplications } from './notifications.service';
 
 /**
@@ -6,8 +8,7 @@ import { NotificationsService, lireApplications } from './notifications.service'
  * Paramètre optionnel `application` (ex. "rheval" ou "absences,missions")
  * pour limiter la lecture / le marquage à une ou plusieurs applications.
  *
- * ⚠️ L'identité vient encore de l'en-tête x-user-id : à remplacer par le
- * guard JWT global (chantier sécurité prioritaire).
+ * x-user-id est réécrit par le garde global avec l'identité vérifiée.
  */
 @Controller('notifications')
 export class NotificationsController {
@@ -69,5 +70,16 @@ export class NotificationsController {
   ) {
     const count = await this.notificationsService.markAllAsRead(userId || userEmail, lireApplications(application));
     return { success: true, count };
+  }
+
+  /** Préférences d'e-mail par application : { rheval: 'IMMEDIAT', absences: 'QUOTIDIEN', … } */
+  @Get('preferences')
+  getPreferences(@UtilisateurCourant() u: UtilisateurAuth) {
+    return this.notificationsService.getPreferences(u.id);
+  }
+
+  @Put('preferences')
+  setPreference(@UtilisateurCourant() u: UtilisateurAuth, @Body() body: { application?: string; email?: string }) {
+    return this.notificationsService.setPreference(u.id, body?.application ?? '', body?.email ?? '');
   }
 }

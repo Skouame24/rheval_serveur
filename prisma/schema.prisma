@@ -176,9 +176,14 @@ model utilisateurs_cache {
   poste             String?
   role              String?             @default("SALARIE")
   telephone         String?
+  /// Anniversaire (jour + mois, jamais l'année) — affiché sur le portail si visible
+  anniversaireJour    Int?
+  anniversaireMois    Int?
+  anniversaireVisible Boolean @default(true)
   cycles_evaluation cycles_evaluation[]
   fiches_evaluation fiches_evaluation[]
   notifications     notifications[]
+  preferences_notifications preferences_notifications[]
 
   @@index([managerId])
   @@index([role])
@@ -195,6 +200,8 @@ model notifications {
   lu         Boolean  @default(false)
   lien       String?
   ficheId    String?
+  /// true : à envoyer dans le récapitulatif quotidien (préférence QUOTIDIEN)
+  emailEnAttente Boolean @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -202,5 +209,33 @@ model notifications {
 
   @@index([userId, lu])
   @@index([userId, application, lu])
+  @@index([createdAt])
+}
+
+/// Préférence d'e-mail par application : IMMEDIAT (défaut), ACTIONS (seulement
+/// ce qui demande une action), QUOTIDIEN (un récapitulatif par jour), AUCUN.
+/// Les notifications restent toujours visibles dans le portail.
+model preferences_notifications {
+  userId      String
+  application String
+  email       String   @default("IMMEDIAT")
+  updatedAt   DateTime @updatedAt
+
+  utilisateurs_cache utilisateurs_cache @relation(fields: [userId], references: [id_microsoft], onDelete: Cascade)
+
+  @@id([userId, application])
+}
+
+/// Avis 👍/👎 sur les réponses de l'assistant Agil (pour améliorer la FAQ)
+model avis_assistant {
+  id        String   @id @default(uuid())
+  userId    String
+  /// Identifiant de l'entrée de FAQ (null si la question n'a pas été comprise)
+  entreeId  String?
+  question  String
+  utile     Boolean
+  createdAt DateTime @default(now())
+
+  @@index([entreeId])
   @@index([createdAt])
 }

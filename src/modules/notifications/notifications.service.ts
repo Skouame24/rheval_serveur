@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 
@@ -48,6 +48,16 @@ export function lireApplications(valeur?: string): ApplicationNotif[] | undefine
   return liste.length > 0 ? liste : undefined;
 }
 
+/** Préférence d'e-mail par application (les notifications restent toujours dans le portail) */
+export const MODES_EMAIL = ['IMMEDIAT', 'ACTIONS', 'QUOTIDIEN', 'AUCUN'] as const;
+export type ModeEmail = (typeof MODES_EMAIL)[number];
+
+/** Applications réglables par l'utilisateur (le portail lui-même n'envoie pas d'e-mail) */
+export const APPLICATIONS_REGLABLES: ApplicationNotif[] = ['rheval', 'absences', 'missions', 'caisse'];
+
+const echapper = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -82,44 +92,30 @@ export class NotificationsService {
 
       this.logger.log(`[NotificationsService] 🔔 Notification In-App créée (#${notif.id}) pour l'utilisateur ${dto.userId} : "${dto.titre}"`);
 
-      // 2. Envoi E-mail asynchrone (non-bloquant) via Brevo SMTP
+      // 2. E-mail asynchrone (non bloquant), selon la préférence de l'utilisateur pour cette application
       if (dto.sendEmail !== false) {
         (async () => {
-          let recipientEmail: string | null = null;
-          let recipientNom: string | undefined = undefined;
-
-          if (dto.userId.includes('@')) {
-            recipientEmail = dto.userId;
-            const u = await this.prisma.utilisateurs_cache.findFirst({
-              where: { email: { equals: dto.userId, mode: 'insensitive' } },
-            });
-            if (u?.nom) recipientNom = u.nom;
-          } else {
-            const u = await this.prisma.utilisateurs_cache.findFirst({
-              where: {
-                OR: [
-                  { id_microsoft: dto.userId },
-                  { matricule: dto.userId },
-                ],
-              },
-            });
-            if (u?.email) {
-              recipientEmail = u.email;
-              recipientNom = u.nom;
-            }
-          }
-
-          if (recipientEmail) {
-            await this.mailService.sendNotificationEmail(
-              recipientEmail,
-              dto.titre,
-              dto.message,
-              dto.lien,
-              recipientNom,
-            );
-          } else {
+          const u = await this.prisma.utilisateurs_cache.findFirst({
+            where: dto.userId.includes('@')
+              ? { email: { equals: dto.userId, mode: 'insensitive' } }
+              : { OR: [{ id_microsoft: dto.userId }, { matricule: dto.userId }] },
+            select: { id_microsoft: true, email: true, nom: true },
+          });
+          const recipientEmail = u?.email ?? (dto.userId.includes('@') ? dto.userId : null);
+          if (!recipientEmail) {
             this.logger.warn(`[NotificationsService] Aucun e-mail trouvé pour l'identifiant utilisateur "${dto.userId}"`);
+            return;
           }
+
+          const mode = u ? await this.modeEmail(u.id_microsoft, notif.application) : 'IMMEDIAT';
+          if (mode === 'AUCUN') return;
+          if (mode === 'ACTIONS' && notif.type === 'INFO') return;
+          if (mode === 'QUOTIDIEN') {
+            await this.prisma.notifications.update({ where: { id: notif.id }, data: { emailEnAttente: true } });
+            return;
+          }
+
+          await this.mailService.sendNotificationEmail(recipientEmail, dto.titre, dto.message, dto.lien, u?.nom);
         })().catch((err) => {
           this.logger.warn(`[NotificationsService] Erreur lors du déclenchement de l'e-mail: ${err?.message || err}`);
         });
@@ -224,5 +220,95 @@ export class NotificationsService {
       data: { lu: true },
     });
     return res.count;
+  }
+
+  // ─── Préférences d'e-mail ────────────────────────────────
+
+  private async modeEmail(userId: string, application: string): Promise<ModeEmail> {
+    const pref = await this.prisma.preferences_notifications.findUnique({
+      where: { userId_application: { userId, application } },
+      select: { email: true },
+    });
+    return (MODES_EMAIL as readonly string[]).includes(pref?.email ?? '') ? (pref!.email as ModeEmail) : 'IMMEDIAT';
+  }
+
+  async getPreferences(userId: string): Promise<Record<string, ModeEmail>> {
+    const lignes = await this.prisma.preferences_notifications.findMany({ where: { userId } });
+    const res: Record<string, ModeEmail> = {};
+    for (const app of APPLICATIONS_REGLABLES) {
+      const l = lignes.find((x) => x.application === app);
+      res[app] = l && (MODES_EMAIL as readonly string[]).includes(l.email) ? (l.email as ModeEmail) : 'IMMEDIAT';
+    }
+    return res;
+  }
+
+  async setPreference(userId: string, application: string, email: string) {
+    if (!(APPLICATIONS_REGLABLES as string[]).includes(application) || !(MODES_EMAIL as readonly string[]).includes(email)) {
+      throw new BadRequestException('Application ou mode d’envoi inconnu.');
+    }
+    await this.prisma.preferences_notifications.upsert({
+      where: { userId_application: { userId, application } },
+      create: { userId, application, email },
+      update: { email },
+    });
+    return this.getPreferences(userId);
+  }
+
+  // ─── Récapitulatif quotidien ─────────────────────────────
+
+  /** Envoie un e-mail récapitulatif par utilisateur pour les notifications mises en attente. */
+  async envoyerRecapitulatifs(): Promise<{ destinataires: number; notifications: number }> {
+    const enAttente = await this.prisma.notifications.findMany({
+      where: { emailEnAttente: true },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, userId: true, titre: true, application: true, lu: true },
+    });
+    if (enAttente.length === 0) return { destinataires: 0, notifications: 0 };
+
+    const parUtilisateur = new Map<string, typeof enAttente>();
+    for (const n of enAttente) {
+      const liste = parUtilisateur.get(n.userId) ?? [];
+      liste.push(n);
+      parUtilisateur.set(n.userId, liste);
+    }
+
+    const LIBELLES: Record<string, string> = {
+      rheval: 'Évaluations', absences: 'Congés & absences', missions: 'Missions', caisse: 'Caisse', portail: 'Portail',
+    };
+
+    let destinataires = 0;
+    for (const [userId, notifs] of parUtilisateur) {
+      // Marquées d'abord : jamais de double envoi même si l'e-mail échoue
+      await this.prisma.notifications.updateMany({
+        where: { id: { in: notifs.map((n) => n.id) } },
+        data: { emailEnAttente: false },
+      });
+      const nonLues = notifs.filter((n) => !n.lu);
+      if (nonLues.length === 0) continue; // déjà vues dans le portail : inutile d'écrire
+
+      const u = await this.prisma.utilisateurs_cache.findUnique({
+        where: { id_microsoft: userId },
+        select: { email: true, nom: true },
+      });
+      if (!u?.email) continue;
+
+      const visibles = nonLues.slice(0, 10);
+      const lignes = visibles
+        .map((n) => `<li style="margin:0 0 8px 0;"><strong>${echapper(LIBELLES[n.application] ?? n.application)}</strong> — ${echapper(n.titre)}</li>`)
+        .join('');
+      const reste = nonLues.length - visibles.length;
+      const message =
+        `Voici ce qui s'est passé depuis votre dernier récapitulatif :` +
+        `<ul style="padding-left:18px;margin:16px 0;">${lignes}</ul>` +
+        (reste > 0 ? `<p>… et ${reste} autre${reste > 1 ? 's' : ''}.</p>` : '');
+      const titre = nonLues.length === 1 ? 'Votre récapitulatif : 1 notification' : `Votre récapitulatif : ${nonLues.length} notifications`;
+
+      await this.mailService
+        .sendNotificationEmail(u.email, titre, message, '/portail', u.nom)
+        .catch((e) => this.logger.warn(`[Récapitulatif] Échec d'envoi à ${u.email} : ${e?.message || e}`));
+      destinataires++;
+    }
+    this.logger.log(`[Récapitulatif] ${destinataires} e-mail(s) pour ${enAttente.length} notification(s).`);
+    return { destinataires, notifications: enAttente.length };
   }
 }
