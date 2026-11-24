@@ -41,12 +41,6 @@ export class AuthService {
     },
     utilisateur: UtilisateurAuth,
   ) {
-    // En simulation de profil, on ne réécrit jamais le compte simulé
-    if (utilisateur.simule) {
-      const simule = await this.prisma.utilisateurs_cache.findUnique({ where: { id_microsoft: utilisateur.id } });
-      return { success: true, message: 'Simulation : aucune synchronisation', user: simule ? mapUserToDto(simule) : null };
-    }
-
     const data = {
       ...body,
       nom: body.nom || utilisateur.nom || utilisateur.email.split('@')[0],

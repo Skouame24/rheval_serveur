@@ -27,7 +27,6 @@ import {
   JETON_ISSUER,
   estPdg,
   secretApi,
-  simulationAutorisee,
   type UtilisateurAuth,
 } from './auth.constants';
 import { PUBLIC_KEY, ROLES_KEY } from './auth.decorators';
@@ -37,8 +36,6 @@ interface JetonPortail {
   email?: string;
   name?: string;
   role?: string;
-  /** id_microsoft du profil simulé (honoré seulement si AUTORISER_SIMULATION=true) */
-  sim?: string;
 }
 
 interface CompteBase {
@@ -95,18 +92,8 @@ export class AuthGuard implements CanActivate {
     }
     if (!payload?.sub) throw new UnauthorizedException('Session invalide');
 
-    let utilisateur = await this.construire(payload.sub, payload.email, payload.role, payload.name);
-
-    if (payload.sim && payload.sim !== utilisateur.id) {
-      if (simulationAutorisee()) {
-        const simule = await this.compte(payload.sim, undefined);
-        if (simule) {
-          this.logger.warn(`Simulation : ${utilisateur.email} agit en tant que ${simule.email}`);
-          utilisateur = { ...this.versUtilisateur(simule, payload.sim, undefined), simule: true };
-        }
-      }
-      // Simulation interdite : on ignore silencieusement, l'utilisateur reste lui-même
-    }
+    // Aucune simulation de profil : l'utilisateur est toujours celui de la session SSO
+    const utilisateur = await this.construire(payload.sub, payload.email, payload.role, payload.name);
 
     req.user = utilisateur;
     req.headers['x-user-id'] = utilisateur.id;

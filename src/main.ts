@@ -9,7 +9,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger, ValidationPipe } from '@nestjs/common';
-import { secretApi, simulationAutorisee } from './common/auth/auth.constants';
+import { secretApi } from './common/auth/auth.constants';
 
 async function bootstrap() {
   const logger = new Logger('AGILLY-RHEVAL-BACKEND');
@@ -29,9 +29,6 @@ async function bootstrap() {
 
   // Le secret partagé avec le portail est obligatoire (arrêt immédiat sinon)
   secretApi();
-  if (simulationAutorisee()) {
-    logger.warn('⚠️  AUTORISER_SIMULATION=true : simulateur de profils actif. NE JAMAIS activer en production.');
-  }
 
   // CORS : uniquement les origines déclarées. En pratique, le navigateur passe
   // par le proxy du portail (même origine) : CORS ne sert qu'en développement.

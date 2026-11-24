@@ -47,8 +47,6 @@ export function estPdg(poste?: string | null, email?: string | null): boolean {
   return MOTIF_PDG.test(p) && !MOTIF_PAS_PDG.test(p);
 }
 
-/** Mode « simulateur de profils » : jamais en production. */
-export const simulationAutorisee = (): boolean => process.env.AUTORISER_SIMULATION === 'true';
 
 /** Utilisateur authentifié, disponible dans req.user */
 export interface UtilisateurAuth {
@@ -60,8 +58,6 @@ export interface UtilisateurAuth {
   /** Rôle calculé par le SSO côté portail (sert uniquement à la création du compte) */
   roleSso?: string;
   nom?: string;
-  /** true si un administrateur simule ce profil (environnement de test uniquement) */
-  simule?: boolean;
   /** PDG : tous les droits */
   pdg?: boolean;
 }
