@@ -1,11 +1,9 @@
-import { PrismaClient as PrismaEvalClient } from "@prisma/client";
 import { PrismaClient as PrismaDemandesClient } from "@prisma-demandes/client";
 
-const prismaEval = new PrismaEvalClient();
 const prismaDemandes = new PrismaDemandesClient();
 
 async function main() {
-  console.log("🌱 Initialisation des Types de Demandes RH & Soldes...");
+  console.log("🌱 Initialisation des types de demandes RH...");
 
   // 1. TYPES DE DEMANDES OFFICIELLES
   const types = [
@@ -83,30 +81,8 @@ async function main() {
   }
   console.log(`✓ ${types.length} types de demandes créés ou mis à jour.`);
 
-  // 2. SOLDES DE CONGÉS 2026 POUR LES UTILISATEURS DU CACHE EVALUATION
-  const users = await prismaEval.utilisateurs_cache.findMany();
-  console.log(`Traitement des soldes pour ${users.length} utilisateur(s)...`);
-
-  for (const u of users) {
-    await prismaDemandes.soldes_conges.upsert({
-      where: {
-        salarieId_annee: {
-          salarieId: u.id_microsoft,
-          annee: 2026,
-        },
-      },
-      update: {},
-      create: {
-        salarieId: u.id_microsoft,
-        annee: 2026,
-        joursAcquis: 26.0,
-        joursPris: u.email.includes("ebenezer") ? 4.0 : 5.0,
-        joursEnAttente: 0.0,
-        reliquatN1: 3.5,
-      },
-    });
-  }
-  console.log(`✓ Soldes 2026 créés pour tous les salariés du référentiel.`);
+  // Les soldes de congés ne sont JAMAIS inventés ici : ils sont saisis ou
+  // ajustés par la RH (PUT /soldes-conges/collaborateur/:id/ajuster) à partir des données réelles.
 }
 
 main()
@@ -116,6 +92,5 @@ main()
   })
   .finally(async () => {
     await prismaDemandes.$disconnect();
-    await prismaEval.$disconnect();
   });
 
