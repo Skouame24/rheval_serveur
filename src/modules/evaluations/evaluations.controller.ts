@@ -1,15 +1,21 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, Headers } from '@nestjs/common';
 import { EvaluationsService } from './evaluations.service';
 import { EvaluationsCronService } from './evaluations-cron.service';
-import { Roles } from '../../common/auth/auth.decorators';
-import { ROLES_ADMIN, ROLES_PILOTAGE_RH } from '../../common/auth/auth.constants';
+import { Roles, UtilisateurCourant } from '../../common/auth/auth.decorators';
+import { ROLES_PILOTAGE_RH, type UtilisateurAuth } from '../../common/auth/auth.constants';
+import { EvaluationsAccesService } from './evaluations-acces.service';
 
 @Controller()
 export class EvaluationsController {
   constructor(
     private readonly evaluationsService: EvaluationsService,
     private readonly evaluationsCronService: EvaluationsCronService,
+    private readonly acces: EvaluationsAccesService,
   ) {}
+
+  /** Étapes où le salarié confirme ses objectifs / donne son accord final */
+  private static readonly ETAPES_CONFIRMATION_OBJECTIFS = ['VALIDATION_OBJECTIFS_SALARIE'];
+  private static readonly ETAPES_ACCORD_FINAL = ['ACCORD_SALARIE', 'VISA_SALARIE'];
 
   @Get('evaluations/me/current')
   async getMyCurrent(
@@ -29,8 +35,10 @@ export class EvaluationsController {
     return this.evaluationsService.getMyHistory(userId, annee, statut, userEmail);
   }
 
+  /** Fiche lisible par le salarié, son N+1, son N+2, la RH et le PDG */
   @Get('evaluations/:id')
-  async getOne(@Param('id') id: string) {
+  async getOne(@Param('id') id: string, @UtilisateurCourant() u: UtilisateurAuth) {
+    await this.acces.assertLecture(id, u);
     return this.evaluationsService.getOne(id);
   }
 
@@ -38,8 +46,10 @@ export class EvaluationsController {
   async signSalarie(
     @Param('id') id: string,
     @Body() body: { observation: string },
+    @UtilisateurCourant() u: UtilisateurAuth,
     @Headers('x-user-id') userId?: string,
   ) {
+    await this.acces.assertSalarie(id, u, EvaluationsController.ETAPES_ACCORD_FINAL);
     return this.evaluationsService.signSalarie(id, body.observation, userId);
   }
 
@@ -47,8 +57,10 @@ export class EvaluationsController {
   async submitAutoEvaluation(
     @Param('id') id: string,
     @Body() body: any,
+    @UtilisateurCourant() u: UtilisateurAuth,
     @Headers('x-user-id') userId?: string,
   ) {
+    await this.acces.assertSalarie(id, u);
     return this.evaluationsService.submitAutoEvaluation(id, body, userId);
   }
 
@@ -65,7 +77,9 @@ export class EvaluationsController {
   async addFormation(
     @Param('id') id: string,
     @Body() body: { intitule: string; delai?: string; priorite?: string; objectifVise?: string },
+    @UtilisateurCourant() u: UtilisateurAuth,
   ) {
+    await this.acces.assertParticipant(id, u);
     return this.evaluationsService.addFormation(id, body);
   }
 
@@ -73,7 +87,10 @@ export class EvaluationsController {
   async deleteFormation(
     @Param('id') id: string,
     @Param('formationId') formationId: string,
+    @UtilisateurCourant() u: UtilisateurAuth,
   ) {
+    const ficheId = await this.acces.assertParticipant(id, u);
+    await this.acces.assertFormationDeFiche(formationId, ficheId);
     return this.evaluationsService.deleteFormation(id, formationId);
   }
 
@@ -81,8 +98,10 @@ export class EvaluationsController {
   async submitVisaSalarie(
     @Param('id') id: string,
     @Body() body: { accord: boolean; observation?: string },
+    @UtilisateurCourant() u: UtilisateurAuth,
     @Headers('x-user-id') userId?: string,
   ) {
+    await this.acces.assertSalarie(id, u, EvaluationsController.ETAPES_ACCORD_FINAL);
     return this.evaluationsService.submitVisaSalarie(id, body, userId);
   }
 
@@ -118,8 +137,10 @@ export class EvaluationsController {
   async validateObjectifsSalarie(
     @Param('id') id: string,
     @Body() body: { accord?: boolean; observation?: string },
+    @UtilisateurCourant() u: UtilisateurAuth,
     @Headers('x-user-id') userId?: string,
   ) {
+    await this.acces.assertSalarie(id, u, EvaluationsController.ETAPES_CONFIRMATION_OBJECTIFS);
     return this.evaluationsService.validateObjectifsSalarie(id, body, userId);
   }
 
@@ -150,7 +171,7 @@ export class EvaluationsController {
     return this.evaluationsService.validerParRh(id, body, rhId);
   }
 
-  @Roles(...ROLES_PILOTAGE_RH, 'N2')
+  @Roles(...ROLES_PILOTAGE_RH)
   @Get('rh/evaluations')
   async getAllForRh() {
     return this.evaluationsService.getAllForRh();
